@@ -25,15 +25,17 @@ type AIService struct {
 	reportSvc *ReportService
 	outingSvc *OutingService
 	emailSvc  *EmailService
+	siyuanSvc *SiyuanService
 }
 
 // NewAIService 创建 AI 服务实例
-func NewAIService(db *gorm.DB, reportSvc *ReportService, outingSvc *OutingService, emailSvc *EmailService) *AIService {
+func NewAIService(db *gorm.DB, reportSvc *ReportService, outingSvc *OutingService, emailSvc *EmailService, siyuanSvc *SiyuanService) *AIService {
 	return &AIService{
 		db:        db,
 		reportSvc: reportSvc,
 		outingSvc: outingSvc,
 		emailSvc:  emailSvc,
+		siyuanSvc: siyuanSvc,
 	}
 }
 
@@ -378,6 +380,30 @@ func (s *AIService) ClearAllMemory() (int64, error) {
 	return model.ClearAllChatMessages(s.db)
 }
 
+func (s *AIService) syncReportToSiyuanAsync(reportID uint) {
+	if s.siyuanSvc == nil {
+		return
+	}
+
+	go func() {
+		if err := s.siyuanSvc.SyncLocalToSiyuan(reportID); err != nil {
+			log.Printf("[AI服务] 同步日报到思源失败(异步): %v\n", err)
+		}
+	}()
+}
+
+func (s *AIService) syncOutingToSiyuanAsync(outingID uint) {
+	if s.siyuanSvc == nil {
+		return
+	}
+
+	go func() {
+		if err := s.siyuanSvc.SyncOutingToSiyuan(outingID); err != nil {
+			log.Printf("[AI服务] 同步外出申请到思源失败(异步): %v\n", err)
+		}
+	}()
+}
+
 // ==================== 工具执行器 ====================
 
 // executeTool 根据工具名称和参数执行对应的业务操作
@@ -446,6 +472,7 @@ func (s *AIService) toolCreateOrUpdateReport(args map[string]any) string {
 		if err != nil {
 			return fmt.Sprintf(`{"error": "更新日报失败: %s"}`, err.Error())
 		}
+		s.syncReportToSiyuanAsync(report.ID)
 		result := map[string]any{
 			"action":  "updated",
 			"id":      report.ID,
@@ -463,6 +490,7 @@ func (s *AIService) toolCreateOrUpdateReport(args map[string]any) string {
 	if err != nil {
 		return fmt.Sprintf(`{"error": "创建日报失败: %s"}`, err.Error())
 	}
+	s.syncReportToSiyuanAsync(report.ID)
 	result := map[string]any{
 		"action":  "created",
 		"id":      report.ID,
@@ -579,6 +607,7 @@ func (s *AIService) toolCreateOuting(args map[string]any) string {
 	if err != nil {
 		return fmt.Sprintf(`{"error": "创建外出申请失败: %s"}`, err.Error())
 	}
+	s.syncOutingToSiyuanAsync(created.ID)
 
 	result := map[string]any{
 		"success":     true,

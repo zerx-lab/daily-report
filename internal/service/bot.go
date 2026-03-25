@@ -608,8 +608,8 @@ func (s *BotService) handleMetaEvent(event *OneBotEvent) {
 
 // handleMessageEvent 处理消息事件
 func (s *BotService) handleMessageEvent(event *OneBotEvent, wsConn *websocket.Conn) {
-	// 只处理私聊和群聊消息
-	if event.MessageType != "private" && event.MessageType != "group" {
+	// 仅处理白名单用户的私聊消息
+	if event.MessageType != "private" {
 		return
 	}
 
@@ -622,21 +622,6 @@ func (s *BotService) handleMessageEvent(event *OneBotEvent, wsConn *websocket.Co
 	text := strings.TrimSpace(event.RawMessage)
 	if text == "" {
 		return
-	}
-
-	// 群消息需要 @ 机器人才处理（通过 CQ 码判断）
-	if event.MessageType == "group" {
-		selfIDStr := strconv.FormatInt(event.SelfID, 10)
-		atTag := fmt.Sprintf("[CQ:at,qq=%s]", selfIDStr)
-		if !strings.Contains(event.RawMessage, atTag) {
-			return
-		}
-		// 移除 @ 标记，提取实际内容
-		text = strings.ReplaceAll(text, atTag, "")
-		text = strings.TrimSpace(text)
-		if text == "" {
-			return
-		}
 	}
 
 	senderName := event.Sender.Nickname

@@ -51,7 +51,7 @@ func main() {
 	emailSvc := service.NewEmailService(db, dailyreport.TemplatesFS)
 	siyuanSvc := service.NewSiyuanService(db)
 	outingSvc := service.NewOutingService(db)
-	aiSvc := service.NewAIService(db, reportSvc, outingSvc, emailSvc)
+	aiSvc := service.NewAIService(db, reportSvc, outingSvc, emailSvc, siyuanSvc)
 	botSvc := service.NewBotService(db, aiSvc)
 	log.Println("[启动] 业务服务初始化完成")
 

@@ -639,15 +639,10 @@ func (s *Scheduler) recordTaskRun(taskName string, errMsg string) {
 func (s *Scheduler) updateTaskRecord(taskName, cronExpr string, enabled bool, nextRun *time.Time) {
 	var task model.ScheduleTask
 	result := s.db.Where("task_name = ?", taskName).First(&task)
+	taskType := s.taskTypeFromName(taskName)
+	description := s.taskDescriptionFromName(taskName)
 	if result.Error != nil {
 		// 不存在则创建
-		taskType := s.taskTypeFromName(taskName)
-		description := "自动创建日报"
-		if taskType == "send" {
-			description = "自动发送日报"
-		} else if taskType == "sync" {
-			description = "自动同步思源笔记到本地"
-		}
 		task = model.ScheduleTask{
 			TaskType:    taskType,
 			TaskName:    taskName,
@@ -660,12 +655,30 @@ func (s *Scheduler) updateTaskRecord(taskName, cronExpr string, enabled bool, ne
 	}
 
 	updates := map[string]interface{}{
-		"enabled": enabled,
+		"task_type":   taskType,
+		"description": description,
+		"enabled":     enabled,
 	}
 	if cronExpr != "" {
 		updates["cron_expr"] = cronExpr
 	}
 	s.db.Model(&task).Updates(updates)
+}
+
+// taskDescriptionFromName 根据任务名获取任务描述
+func (s *Scheduler) taskDescriptionFromName(name string) string {
+	switch name {
+	case "auto_create_report":
+		return "自动创建日报"
+	case "auto_send_report":
+		return "自动发送日报"
+	case "auto_sync_siyuan":
+		return "自动同步思源笔记到本地"
+	case "auto_clear_memory":
+		return "自动清理对话记忆"
+	default:
+		return "自动任务"
+	}
 }
 
 // taskTypeFromName 根据任务名获取任务类型
