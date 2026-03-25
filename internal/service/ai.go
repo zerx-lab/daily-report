@@ -302,6 +302,7 @@ func (s *AIService) Chat(ctx context.Context, userID string, userMessage string)
 
 	tools := s.buildTools()
 	modelName := openai.ChatModel(cfg.Model)
+	hasToolCall := false
 
 	// 工具调用循环（最多 10 轮，防止无限循环）
 	for round := 0; round < 10; round++ {
@@ -333,7 +334,7 @@ func (s *AIService) Chat(ctx context.Context, userID string, userMessage string)
 				content = "操作完成。"
 			}
 
-			if intent.NeedToolCall {
+			if intent.NeedToolCall && !hasToolCall {
 				log.Printf("[AI] 检测到动作意图但未触发工具调用: action=%s, user=%s, message=%s\n", intent.ActionName, userID, userMessage)
 				content = s.buildNoToolCallNotice(intent, content)
 			}
@@ -347,6 +348,7 @@ func (s *AIService) Chat(ctx context.Context, userID string, userMessage string)
 		}
 
 		// 有工具调用，先把 assistant 消息加入历史
+		hasToolCall = true
 		messages = append(messages, choice.Message.ToParam())
 
 		// 逐个执行工具调用

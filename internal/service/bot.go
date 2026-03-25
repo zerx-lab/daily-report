@@ -608,8 +608,8 @@ func (s *BotService) handleMetaEvent(event *OneBotEvent) {
 
 // handleMessageEvent 处理消息事件
 func (s *BotService) handleMessageEvent(event *OneBotEvent, wsConn *websocket.Conn) {
-	// 仅处理白名单用户的私聊消息
-	if event.MessageType != "private" {
+	// 仅处理白名单用户的好友私聊消息，忽略群聊和群临时会话
+	if !isDirectPrivateMessage(event) {
 		return
 	}
 
@@ -676,6 +676,23 @@ func (s *BotService) handleMessageEvent(event *OneBotEvent, wsConn *websocket.Co
 
 	// 发送回复
 	s.sendReply(event, reply, wsConn)
+}
+
+func isDirectPrivateMessage(event *OneBotEvent) bool {
+	if event == nil {
+		return false
+	}
+
+	if event.MessageType != "private" {
+		return false
+	}
+
+	if event.GroupID != 0 {
+		return false
+	}
+
+	subType := strings.ToLower(strings.TrimSpace(event.SubType))
+	return subType == "" || subType == "friend"
 }
 
 // ==================== 消息发送 ====================
