@@ -440,17 +440,18 @@ function toggleJob(taskType, enabled) {
         method: 'POST',
         body: formData
     }).then(function(resp) {
-        if (resp.redirected) {
-            window.location.href = resp.url;
+        return resp.json();
+    }).then(function(data) {
+        if (data.code !== 0) {
+            showToast(data.message || '操作失败', 'error');
+            var toggle = document.getElementById('toggle_' + taskType);
+            if (toggle) toggle.checked = !enabled;
+            if (label) label.textContent = enabled ? '已停用' : '已启用';
             return;
         }
-        return resp.text();
-    }).then(function() {
-        // 刷新页面以获取最新状态
         window.location.reload();
     }).catch(function(err) {
         showToast('操作失败: ' + err.message, 'error');
-        // 恢复开关状态
         var toggle = document.getElementById('toggle_' + taskType);
         if (toggle) toggle.checked = !enabled;
         if (label) label.textContent = enabled ? '已停用' : '已启用';
@@ -482,12 +483,12 @@ function saveCron() {
         method: 'POST',
         body: formData
     }).then(function(resp) {
-        if (resp.redirected) {
-            window.location.href = resp.url;
+        return resp.json();
+    }).then(function(data) {
+        if (data.code !== 0) {
+            showToast(data.message || '保存失败', 'error');
             return;
         }
-        return resp.text();
-    }).then(function() {
         var modal = bootstrap.Modal.getInstance(document.getElementById('cronModal'));
         if (modal) modal.hide();
         window.location.reload();
@@ -519,12 +520,16 @@ function confirmTrigger() {
         method: 'POST',
         body: formData
     }).then(function(resp) {
-        if (resp.redirected) {
-            window.location.href = resp.url;
+        return resp.json();
+    }).then(function(data) {
+        if (data.code !== 0) {
+            showToast(data.message || '执行失败', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>确认执行';
+            }
             return;
         }
-        return resp.text();
-    }).then(function() {
         var modal = bootstrap.Modal.getInstance(document.getElementById('triggerModal'));
         if (modal) modal.hide();
         window.location.reload();

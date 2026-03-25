@@ -340,7 +340,7 @@ func (s *Scheduler) UpdateJobCron(taskType, cronExpr string) error {
 		return fmt.Errorf("更新 cron 表达式失败: %w", err)
 	}
 
-	// 如果任务已启用，则重新注册
+	// 如果任务已启用，则重新注册；否则仅更新 schedule_tasks 表记录
 	enabled := model.GetSettingValue(s.db, model.CategorySchedule, enabledKey, "false")
 	if enabled == "true" {
 		var taskFunc func()
@@ -355,6 +355,9 @@ func (s *Scheduler) UpdateJobCron(taskType, cronExpr string) error {
 		if err := s.registerJob(jobName, cronExpr, taskFunc); err != nil {
 			return err
 		}
+	} else {
+		// 任务未启用时也需要更新 schedule_tasks 表的 cron_expr，否则页面显示不会变
+		s.updateTaskRecord(jobName, cronExpr, false, nil)
 	}
 
 	log.Printf("[调度器] 任务 %s cron 表达式已更新: %s\n", jobName, cronExpr)
