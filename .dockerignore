@@ -1,0 +1,61 @@
+# 数据目录
+data/
+
+# 构建产物
+build/
+dist/
+
+# 数据库文件
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# 日志文件
+*.log
+
+# 敏感配置
+config/config.yaml
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 文档
+README.md
+AGENTS.md
+*.eml
+*.xlsx
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.bak
+
+# 二进制
+server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 测试覆盖率
+*.out
+*.test
+coverage.html
+
+# Docker
+Dockerfile
+.dockerignore
