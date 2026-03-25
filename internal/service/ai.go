@@ -129,7 +129,10 @@ func (s *AIService) defaultSystemPrompt() string {
 4. 外出申请需要：外出时间、返回时间、外出地点、外出事由
 5. 如果用户说"明天"、"后天"等相对日期，需要正确计算实际日期
 6. 回复用户时使用友好的中文，适当使用 emoji 增加可读性
-7. 完成操作后，向用户确认操作结果，包含关键信息摘要`,
+7. 完成操作后，向用户确认操作结果，包含关键信息摘要
+8. **重要**：当用户只说"发送"而没有明确指定发送什么时，必须先确认用户要发送的是日报还是外出申请，绝对不要默认发送日报
+9. 发送外出申请时，如果用户没有提供 ID，直接调用 send_outing（不传 id），系统会自动发送最近一条待发送的外出申请
+10. 发送日报邮件会将所有非草稿状态的日报汇总到一个 Excel 表格中发送，而不是只发送某一天的`,
 		today, weekday, now.Format("15:04"),
 		today, weekday,
 	)
@@ -185,18 +188,13 @@ func (s *AIService) buildTools() []openai.ChatCompletionToolUnionParam {
 			},
 		}),
 
-		// 发送日报邮件
+		// 发送日报邮件（批量发送所有非草稿日报）
 		openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
 			Name:        "send_report",
-			Description: openai.String("发送指定日期的日报邮件。只有内容非空的日报才能发送。"),
+			Description: openai.String("发送日报邮件。会将所有非草稿状态的日报汇总到一个 Excel 附件中批量发送，无需指定日期。"),
 			Parameters: openai.FunctionParameters{
-				"type": "object",
-				"properties": map[string]any{
-					"date": map[string]any{
-						"type":        "string",
-						"description": "要发送的日报日期，格式 yyyy-MM-dd。默认今天。",
-					},
-				},
+				"type":       "object",
+				"properties": map[string]any{},
 			},
 		}),
 
@@ -235,16 +233,15 @@ func (s *AIService) buildTools() []openai.ChatCompletionToolUnionParam {
 		// 发送外出申请邮件
 		openai.ChatCompletionFunctionTool(openai.FunctionDefinitionParam{
 			Name:        "send_outing",
-			Description: openai.String("发送指定 ID 的外出申请邮件。"),
+			Description: openai.String("发送外出申请邮件。如果不传 id，会自动发送最近一条待发送的外出申请。"),
 			Parameters: openai.FunctionParameters{
 				"type": "object",
 				"properties": map[string]any{
 					"id": map[string]any{
 						"type":        "integer",
-						"description": "外出申请的 ID",
+						"description": "外出申请的 ID。可选，不传则自动发送最近一条待发送的外出申请。",
 					},
 				},
-				"required": []string{"id"},
 			},
 		}),
 	}
@@ -253,7 +250,7 @@ func (s *AIService) buildTools() []openai.ChatCompletionToolUnionParam {
 // ==================== 核心对话方法 ====================
 
 // Chat 处理用户消息并返回 AI 回复（支持多轮 tool calling）
-func (s *AIService) Chat(ctx context.Context, userMessage string) (string, error) {
+func (s *AIService) Chat(ctx context.Context, userID string, userMessage string) (string, error) {
 	cfg, err := s.loadConfig()
 	if err != nil {
 		return "", err
@@ -270,8 +267,29 @@ func (s *AIService) Chat(ctx context.Context, userMessage string) (string, error
 	// 初始化消息列表
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(systemPrompt),
-		openai.UserMessage(userMessage),
 	}
+
+	// 加载对话记忆
+	memoryCount := s.getMemoryCount()
+	if memoryCount > 0 && userID != "" {
+		history, err := model.GetRecentMessages(s.db, userID, memoryCount)
+		if err != nil {
+			log.Printf("[AI] 加载对话记忆失败: %v\n", err)
+		} else if len(history) > 0 {
+			for _, msg := range history {
+				switch msg.Role {
+				case "user":
+					messages = append(messages, openai.UserMessage(msg.Content))
+				case "assistant":
+					messages = append(messages, openai.AssistantMessage(msg.Content))
+				}
+			}
+			log.Printf("[AI] 加载了 %d 条对话记忆 (user=%s)\n", len(history), userID)
+		}
+	}
+
+	// 追加当前用户消息
+	messages = append(messages, openai.UserMessage(userMessage))
 
 	tools := s.buildTools()
 	modelName := openai.ChatModel(cfg.Model)
@@ -305,6 +323,11 @@ func (s *AIService) Chat(ctx context.Context, userMessage string) (string, error
 			if content == "" {
 				content = "操作完成。"
 			}
+			// 保存对话记忆
+			if userID != "" {
+				_ = model.SaveChatMessage(s.db, userID, "user", userMessage)
+				_ = model.SaveChatMessage(s.db, userID, "assistant", content)
+			}
 			log.Printf("[AI] 对话完成，共 %d 轮工具调用，token 使用: %d\n", round, completion.Usage.TotalTokens)
 			return content, nil
 		}
@@ -326,7 +349,33 @@ func (s *AIService) Chat(ctx context.Context, userMessage string) (string, error
 		}
 	}
 
-	return "抱歉，处理过程过于复杂，请简化你的请求后重试。", nil
+	content := "抱歉，处理过程过于复杂，请简化你的请求后重试。"
+	// 保存对话记忆
+	if userID != "" {
+		_ = model.SaveChatMessage(s.db, userID, "user", userMessage)
+		_ = model.SaveChatMessage(s.db, userID, "assistant", content)
+	}
+	return content, nil
+}
+
+// getMemoryCount 获取 AI 记忆条数配置
+func (s *AIService) getMemoryCount() int {
+	v := model.GetSettingValue(s.db, model.CategoryAI, model.KeyAIMemoryCount, "20")
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		return 20
+	}
+	return n
+}
+
+// ClearMemory 清除指定用户的对话记忆
+func (s *AIService) ClearMemory(userID string) (int64, error) {
+	return model.ClearChatMessages(s.db, userID)
+}
+
+// ClearAllMemory 清除所有用户的对话记忆（定时任务使用）
+func (s *AIService) ClearAllMemory() (int64, error) {
+	return model.ClearAllChatMessages(s.db)
 }
 
 // ==================== 工具执行器 ====================
@@ -467,28 +516,24 @@ func (s *AIService) toolListRecentReports(args map[string]any) string {
 	return string(data)
 }
 
-// toolSendReport 发送日报邮件
+// toolSendReport 发送日报邮件（批量发送所有非草稿日报，与定时任务一致）
 func (s *AIService) toolSendReport(args map[string]any) string {
-	date, _ := args["date"].(string)
-	if date == "" {
-		date = time.Now().Format("2006-01-02")
-	}
-
-	report, err := s.reportSvc.GetByDate(date)
+	// 获取所有非草稿日报
+	reports, err := s.reportSvc.GetAllNonDraftReports()
 	if err != nil {
-		return fmt.Sprintf(`{"error": "找不到 %s 的日报"}`, date)
+		return fmt.Sprintf(`{"error": "获取日报列表失败: %s"}`, err.Error())
+	}
+	if len(reports) == 0 {
+		return `{"error": "没有可发送的日报记录（所有日报均为草稿状态）"}`
 	}
 
-	if strings.TrimSpace(report.Content) == "" || report.Content == "待填写" {
-		return `{"error": "日报内容为空，无法发送"}`
-	}
-
-	_, sendErr := s.emailSvc.SendReport(report, model.EmailSendTypeManual)
+	// 批量发送（所有日报合并到一个 Excel 表格中）
+	_, sendErr := s.emailSvc.SendBatchReports(reports, model.EmailSendTypeManual)
 	if sendErr != nil {
 		return fmt.Sprintf(`{"error": "发送失败: %s"}`, sendErr.Error())
 	}
 
-	return fmt.Sprintf(`{"success": true, "message": "%s 日报邮件发送成功", "date": "%s"}`, date, date)
+	return fmt.Sprintf(`{"success": true, "message": "日报邮件发送成功，共 %d 条日报", "count": %d}`, len(reports), len(reports))
 }
 
 // toolCreateOuting 创建外出申请
@@ -552,15 +597,34 @@ func (s *AIService) toolCreateOuting(args map[string]any) string {
 
 // toolSendOuting 发送外出申请邮件
 func (s *AIService) toolSendOuting(args map[string]any) string {
-	idFloat, ok := args["id"].(float64)
-	if !ok || idFloat <= 0 {
-		return `{"error": "无效的外出申请 ID"}`
-	}
-	id := uint(idFloat)
+	var outing *model.OutingRequest
+	var err error
 
-	outing, err := s.outingSvc.GetByID(id)
-	if err != nil {
-		return fmt.Sprintf(`{"error": "找不到外出申请(id=%d)"}`, id)
+	idFloat, ok := args["id"].(float64)
+	if ok && idFloat > 0 {
+		// 指定了 ID，按 ID 查找
+		id := uint(idFloat)
+		outing, err = s.outingSvc.GetByID(id)
+		if err != nil {
+			return fmt.Sprintf(`{"error": "找不到外出申请(id=%d)"}`, id)
+		}
+	} else {
+		// 未指定 ID，自动查找最近一条待发送的外出申请
+		outings, listErr := s.outingSvc.ListRecent(10)
+		if listErr != nil || len(outings) == 0 {
+			return `{"error": "没有找到外出申请记录，请先创建外出申请"}`
+		}
+		found := false
+		for i := range outings {
+			if outings[i].Status == model.OutingStatusReady || outings[i].Status == model.OutingStatusFailed {
+				outing = &outings[i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			return `{"error": "没有待发送的外出申请，所有外出申请都已发送"}`
+		}
 	}
 
 	// 1. 获取外出申请独立的收件人配置
@@ -614,7 +678,7 @@ func (s *AIService) toolSendOuting(args map[string]any) string {
 			"status":    model.EmailStatusFailed,
 			"error_msg": sendErr.Error(),
 		})
-		s.outingSvc.UpdateStatus(id, model.OutingStatusFailed)
+		s.outingSvc.UpdateStatus(outing.ID, model.OutingStatusFailed)
 		return fmt.Sprintf(`{"error": "发送外出申请邮件失败: %s"}`, sendErr.Error())
 	}
 
@@ -623,9 +687,9 @@ func (s *AIService) toolSendOuting(args map[string]any) string {
 		"status":  model.EmailStatusSuccess,
 		"sent_at": now,
 	})
-	s.outingSvc.UpdateStatus(id, model.OutingStatusSent)
+	s.outingSvc.UpdateStatus(outing.ID, model.OutingStatusSent)
 
-	return fmt.Sprintf(`{"success": true, "message": "外出申请邮件发送成功", "id": %d}`, id)
+	return fmt.Sprintf(`{"success": true, "message": "外出申请邮件发送成功", "id": %d}`, outing.ID)
 }
 
 // splitAndTrimList 按逗号或换行分隔并去除空白

@@ -85,6 +85,7 @@ func autoMigrate() error {
 		&EmailLog{},
 		&Setting{},
 		&OutingRequest{},
+		&ChatMessage{},
 	)
 }
 

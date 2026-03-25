@@ -607,6 +607,16 @@
                             </div>
                         </div>
 
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">对话记忆条数</label>
+                                <input type="number" class="form-control" name="memory_count"
+                                       value="{{if .ai}}{{index .ai "memory_count"}}{{end}}"
+                                       placeholder="20" min="0" max="100">
+                                <div class="form-text">AI 记忆最近几条对话消息，设为 0 则不记忆。每天凌晨自动清理，也可发送 <code>/new</code> 手动清除</div>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">自定义系统提示词（可选）</label>
                             <textarea class="form-control" name="system_prompt" rows="4"

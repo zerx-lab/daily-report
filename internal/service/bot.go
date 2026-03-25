@@ -648,7 +648,23 @@ func (s *BotService) handleMessageEvent(event *OneBotEvent, wsConn *websocket.Co
 	if wsConn != nil {
 		source = "WebSocket"
 	}
-	log.Printf("[机器人] 收到消息(%s): [%s(%d)] %s\n", source, senderName, event.UserID, truncateStr(text, 100))
+	userID := strconv.FormatInt(event.UserID, 10)
+	log.Printf("[机器人] 收到消息(%s): [%s(%s)] %s\n", source, senderName, userID, truncateStr(text, 100))
+
+	// 处理 /new 命令：清除对话记忆
+	if text == "/new" {
+		cleared, err := s.aiSvc.ClearMemory(userID)
+		var reply string
+		if err != nil {
+			log.Printf("[机器人] 清除对话记忆失败(user=%s): %v\n", userID, err)
+			reply = "⚠️ 清除记忆失败: " + err.Error()
+		} else {
+			log.Printf("[机器人] 清除对话记忆成功(user=%s): %d 条\n", userID, cleared)
+			reply = fmt.Sprintf("🧹 记忆已清除！共清除 %d 条对话记录。\n\n现在是全新的对话，请告诉我你需要什么帮助 😊", cleared)
+		}
+		s.sendReply(event, reply, wsConn)
+		return
+	}
 
 	// 获取 context
 	s.mu.RLock()
@@ -663,7 +679,7 @@ func (s *BotService) handleMessageEvent(event *OneBotEvent, wsConn *websocket.Co
 	chatCtx, chatCancel := context.WithTimeout(ctx, 120*time.Second)
 	defer chatCancel()
 
-	reply, err := s.aiSvc.Chat(chatCtx, text)
+	reply, err := s.aiSvc.Chat(chatCtx, userID, text)
 	if err != nil {
 		log.Printf("[机器人] AI 处理消息失败: %v\n", err)
 		reply = fmt.Sprintf("⚠️ 处理消息时出错: %s", err.Error())

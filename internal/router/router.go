@@ -562,7 +562,7 @@ func (r *Router) apiAIChat(c *gin.Context) {
 		return
 	}
 
-	reply, err := r.aiSvc.Chat(c.Request.Context(), req.Message)
+	reply, err := r.aiSvc.Chat(c.Request.Context(), "web", req.Message)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": err.Error()})
 		return
@@ -649,6 +649,7 @@ func (r *Router) saveAISettings(c *gin.Context) {
 		model.KeyAIMaxTokens:    strings.TrimSpace(c.PostForm("max_tokens")),
 		model.KeyAITemperature:  strings.TrimSpace(c.PostForm("temperature")),
 		model.KeyAISystemPrompt: strings.TrimSpace(c.PostForm("system_prompt")),
+		model.KeyAIMemoryCount:  strings.TrimSpace(c.PostForm("memory_count")),
 	}
 
 	// API Key 仅在非空时更新

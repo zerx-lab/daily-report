@@ -111,6 +111,7 @@ const (
 	KeyAIMaxTokens    = "max_tokens"    // 最大生成 token 数
 	KeyAITemperature  = "temperature"   // 采样温度
 	KeyAISystemPrompt = "system_prompt" // 自定义系统提示词（可选，留空使用内置）
+	KeyAIMemoryCount  = "memory_count"  // AI 记忆消息条数（0=不记忆）
 )
 
 // QQ 机器人相关
@@ -347,6 +348,7 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Category: CategoryAI, Key: KeyAIMaxTokens, Value: "2048", Remark: "最大生成 token 数"},
 		{Category: CategoryAI, Key: KeyAITemperature, Value: "0.7", Remark: "采样温度（0-2）"},
 		{Category: CategoryAI, Key: KeyAISystemPrompt, Value: "", Remark: "自定义系统提示词（留空使用内置）"},
+		{Category: CategoryAI, Key: KeyAIMemoryCount, Value: "20", Remark: "AI 记忆最近消息条数（0=不记忆）"},
 
 		// QQ 机器人默认值
 		{Category: CategoryBot, Key: KeyBotEnabled, Value: "false", Remark: "启用 QQ 机器人"},

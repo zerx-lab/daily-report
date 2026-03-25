@@ -59,7 +59,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	scheduler, err := service.NewScheduler(db, reportSvc, emailSvc, siyuanSvc)
+	scheduler, err := service.NewScheduler(db, reportSvc, emailSvc, siyuanSvc, aiSvc)
 	if err != nil {
 		log.Fatalf("[致命] 创建调度器失败: %v\n", err)
 	}
