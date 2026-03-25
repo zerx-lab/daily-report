@@ -416,6 +416,27 @@
             background-color: var(--color-primary);
             border-color: var(--color-primary);
         }
+        #btnSyncSiyuan {
+            border-radius: 6px;
+            font-size: 0.8rem;
+            padding: 4px 12px;
+            transition: all 0.2s;
+        }
+        #btnSyncSiyuan:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        #btnSyncSiyuan.syncing {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+        .spin-icon {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
     </style>
 </head>
 {{end}}
@@ -443,6 +464,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link{{if eq .active "outings"}} active{{end}}" href="/outings">
+                        <i class="bi bi-box-arrow-right me-1"></i>外出申请
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link{{if eq .active "logs"}} active{{end}}" href="/logs">
                         <i class="bi bi-envelope me-1"></i>发送记录
                     </a>
@@ -458,6 +484,10 @@
                     </a>
                 </li>
             </ul>
+            <button type="button" class="btn btn-outline-light btn-sm ms-3" id="btnSyncSiyuan"
+                    title="从思源笔记同步数据（日报 + 外出申请）" onclick="syncAllFromSiyuan()">
+                <i class="bi bi-cloud-download me-1" id="syncIcon"></i><span id="syncText">同步</span>
+            </button>
         </div>
     </div>
 </nav>
@@ -510,5 +540,65 @@
         window.history.replaceState({}, '', newUrl);
     }
 })();
+
+// ========== 全局思源同步 ==========
+function syncAllFromSiyuan() {
+    var btn = document.getElementById('btnSyncSiyuan');
+    var icon = document.getElementById('syncIcon');
+    var text = document.getElementById('syncText');
+    if (!btn || btn.classList.contains('syncing')) return;
+
+    btn.classList.add('syncing');
+    icon.className = 'bi bi-arrow-repeat me-1 spin-icon';
+    text.textContent = '同步中…';
+
+    fetch('/sync/all', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        btn.classList.remove('syncing');
+        icon.className = 'bi bi-cloud-download me-1';
+        text.textContent = '同步';
+
+        var container = document.getElementById('flashContainer');
+        if (!container) return;
+
+        var level = (data.code === 0) ? 'success' : 'danger';
+        var iconCls = (data.code === 0) ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill';
+        var alertEl = document.createElement('div');
+        alertEl.className = 'alert alert-' + level + ' alert-dismissible fade show d-flex align-items-center';
+        alertEl.setAttribute('role', 'alert');
+        alertEl.innerHTML = '<i class="bi ' + iconCls + ' me-2"></i>' +
+            '<div>' + (data.message || '同步完成') + '</div>' +
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>';
+        container.appendChild(alertEl);
+        setTimeout(function() {
+            var bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
+            if (bsAlert) bsAlert.close();
+        }, 6000);
+    })
+    .catch(function(err) {
+        btn.classList.remove('syncing');
+        icon.className = 'bi bi-cloud-download me-1';
+        text.textContent = '同步';
+
+        var container = document.getElementById('flashContainer');
+        if (container) {
+            var alertEl = document.createElement('div');
+            alertEl.className = 'alert alert-danger alert-dismissible fade show d-flex align-items-center';
+            alertEl.setAttribute('role', 'alert');
+            alertEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>' +
+                '<div>同步请求失败: ' + err.message + '</div>' +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>';
+            container.appendChild(alertEl);
+            setTimeout(function() {
+                var bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
+                if (bsAlert) bsAlert.close();
+            }, 6000);
+        }
+    });
+}
 </script>
 {{end}}

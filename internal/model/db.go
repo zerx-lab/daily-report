@@ -77,6 +77,7 @@ func autoMigrate() error {
 		&ScheduleTask{},
 		&EmailLog{},
 		&Setting{},
+		&OutingRequest{},
 	)
 }
 

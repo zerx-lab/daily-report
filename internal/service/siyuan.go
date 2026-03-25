@@ -68,10 +68,12 @@ type AppendDetachedBlocksRequest struct {
 
 // BlockValueEntry 单个列值
 type BlockValueEntry struct {
-	KeyID      string      `json:"keyID"`
-	Type       string      `json:"type"`
-	IsDetached bool        `json:"isDetached"`
-	Block      *BlockValue `json:"block,omitempty"`
+	KeyID      string       `json:"keyID"`
+	Type       string       `json:"type"`
+	IsDetached bool         `json:"isDetached"`
+	Block      *BlockValue  `json:"block,omitempty"`
+	Text       *AVTextValue `json:"text,omitempty"`
+	Date       *AVDateValue `json:"date,omitempty"`
 }
 
 // BlockValue 块内容值
@@ -124,6 +126,7 @@ type AVValue struct {
 	Block   *AVBlockValue   `json:"block,omitempty"`
 	Created *AVCreatedValue `json:"created,omitempty"` // 创建时间（思源返回对象）
 	Text    *AVTextValue    `json:"text,omitempty"`
+	Date    *AVDateValue    `json:"date,omitempty"` // 日期类型值
 }
 
 // AVCreatedValue 创建时间类型值（思源 API 返回对象而非纯数字）
@@ -143,6 +146,14 @@ type AVTextValue struct {
 	Content string `json:"content"`
 }
 
+// AVDateValue 日期类型值
+type AVDateValue struct {
+	Content    int64 `json:"content"`    // 毫秒时间戳（开始时间）
+	Content2   int64 `json:"content2"`   // 毫秒时间戳（结束时间，可选）
+	HasEndDate bool  `json:"hasEndDate"` // 是否有结束日期
+	IsNotTime  bool  `json:"isNotTime"`  // 是否仅日期（不含时分）
+}
+
 // SetBlockAttrRequest 修改单元格请求
 type SetBlockAttrRequest struct {
 	AVID   string               `json:"avID"`
@@ -153,7 +164,10 @@ type SetBlockAttrRequest struct {
 
 // SetBlockAttrReqValue 修改单元格请求值
 type SetBlockAttrReqValue struct {
-	Block *BlockValue `json:"block,omitempty"`
+	Type  string       `json:"type,omitempty"` // 值类型：block / text / date 等，思源 API 依此字段分派处理
+	Block *BlockValue  `json:"block,omitempty"`
+	Text  *AVTextValue `json:"text,omitempty"`
+	Date  *AVDateValue `json:"date,omitempty"`
 }
 
 // RemoveBlocksRequest 删除行请求
@@ -336,6 +350,7 @@ func (s *SiyuanService) UpdateReportEntry(rowID, content string) error {
 		KeyID:  cfg.KeyID,
 		ItemID: rowID,
 		Value: SetBlockAttrReqValue{
+			Type:  "block",
 			Block: &BlockValue{Content: content},
 		},
 	}
@@ -632,4 +647,552 @@ func TodayDateStr() string {
 func TodayWeekday() string {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	return weekdayChinese(time.Now().In(loc).Weekday())
+}
+
+// ==================== 通用 AV 渲染 ====================
+
+// AVColumn 属性视图列定义
+type AVColumn struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Hidden bool   `json:"hidden"`
+}
+
+// AVRenderResult 通用 AV 渲染结果
+type AVRenderResult struct {
+	ViewName string
+	Columns  []AVColumn
+	Rows     []AVRow
+	RowCount int
+}
+
+// RenderAVGeneric 渲染任意属性视图，返回列定义和行数据
+func (s *SiyuanService) RenderAVGeneric(avID string, page, pageSize int) (*AVRenderResult, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 200
+	}
+
+	reqBody := RenderAVRequest{
+		ID:       avID,
+		ViewID:   "",
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	resp, err := s.doRequest("/api/av/renderAttributeView", reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("渲染属性视图失败(avID=%s): %w", avID, err)
+	}
+
+	// 解析 view 层
+	var raw struct {
+		View struct {
+			Name     string     `json:"name"`
+			Columns  []AVColumn `json:"columns"`
+			Rows     []AVRow    `json:"rows"`
+			RowCount int        `json:"rowCount"`
+		} `json:"view"`
+	}
+	if err := json.Unmarshal(resp.Data, &raw); err != nil {
+		return nil, fmt.Errorf("解析属性视图响应失败: %w", err)
+	}
+
+	return &AVRenderResult{
+		ViewName: raw.View.Name,
+		Columns:  raw.View.Columns,
+		Rows:     raw.View.Rows,
+		RowCount: raw.View.RowCount,
+	}, nil
+}
+
+// ==================== 外出申请同步 ====================
+
+// OutingAVConfig 外出申请 AV 配置（申请人/部门为固定值，列映射用于 AV 字段匹配）
+type OutingAVConfig struct {
+	AvID       string // 属性视图 ID
+	BlockID    string // 数据库块 ID（创建行时需要）
+	Applicant  string // 固定申请人（来自设置）
+	Department string // 固定部门（来自设置）
+
+	// 列 Key ID 映射（可选，留空则按列名自动匹配）
+	KeyOutTime     string
+	KeyReturnTime  string
+	KeyDestination string
+	KeyReason      string
+	KeyRemarks     string
+}
+
+// getOutingAVConfig 从数据库设置中获取外出申请 AV 配置
+func (s *SiyuanService) getOutingAVConfig() (*OutingAVConfig, error) {
+	m, err := model.GetSettingsMapByCategory(s.db, model.CategoryOuting)
+	if err != nil {
+		return nil, fmt.Errorf("获取外出申请配置失败: %w", err)
+	}
+
+	avID := m[model.KeyOutingAvID]
+	if avID == "" {
+		return nil, fmt.Errorf("外出申请属性视图 ID (av_id) 未配置")
+	}
+
+	return &OutingAVConfig{
+		AvID:           avID,
+		BlockID:        m[model.KeyOutingBlockID],
+		Applicant:      m[model.KeyOutingApplicant],
+		Department:     m[model.KeyOutingDepartment],
+		KeyOutTime:     m[model.KeyOutingKeyOutTime],
+		KeyReturnTime:  m[model.KeyOutingKeyReturnTime],
+		KeyDestination: m[model.KeyOutingKeyDestination],
+		KeyReason:      m[model.KeyOutingKeyReason],
+		KeyRemarks:     m[model.KeyOutingKeyRemarks],
+	}, nil
+}
+
+// extractCellText 从单元格中提取文本内容（兼容 block / text 类型）
+func extractCellText(val *AVValue) string {
+	if val == nil {
+		return ""
+	}
+	if val.Block != nil && val.Block.Content != "" {
+		return val.Block.Content
+	}
+	if val.Text != nil && val.Text.Content != "" {
+		return val.Text.Content
+	}
+	return ""
+}
+
+// extractCellTime 从单元格中提取时间（兼容 date / created / text 类型）
+func extractCellTime(val *AVValue) time.Time {
+	if val == nil {
+		return time.Time{}
+	}
+
+	// 优先尝试 date / created 类型（毫秒时间戳）
+	var ts int64
+	if val.Date != nil && val.Date.Content != 0 {
+		ts = val.Date.Content
+	} else if val.Created != nil && val.Created.Content != 0 {
+		ts = val.Created.Content
+	}
+	if ts != 0 {
+		return time.UnixMilli(ts)
+	}
+
+	// 回退：解析 text / block 中的时间字符串
+	text := extractCellText(val)
+	if text != "" {
+		return parseTimeText(text)
+	}
+	return time.Time{}
+}
+
+// parseTimeText 尝试多种常见格式解析时间字符串
+func parseTimeText(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}
+	}
+
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+
+	// 常见格式列表（按优先级排列）
+	formats := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006/01/02 15:04:05",
+		"2006/01/02 15:04",
+		"2006年1月2日15时04分",
+		"2006年1月2日 15:04",
+		"2006年01月02日 15:04",
+		"2006-01-02",
+		"2006/01/02",
+	}
+
+	for _, f := range formats {
+		if t, err := time.ParseInLocation(f, s, loc); err == nil {
+			return t
+		}
+	}
+
+	log.Printf("[同步] 无法解析时间文本: %q\n", s)
+	return time.Time{}
+}
+
+// SyncOutingsToLocal 从思源笔记同步外出申请数据到本地
+// 申请人和部门为固定值（来自设置），AV 中只读取事由/地点/时间/备注
+func (s *SiyuanService) SyncOutingsToLocal() (int, int, error) {
+	cfg, err := s.getOutingAVConfig()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	avResult, err := s.RenderAVGeneric(cfg.AvID, 1, 200)
+	if err != nil {
+		return 0, 0, fmt.Errorf("从思源笔记获取外出申请数据失败: %w", err)
+	}
+
+	// 构建列 ID → 列名的映射（用于按列名自动匹配）
+	colNameByID := make(map[string]string, len(avResult.Columns))
+	for _, col := range avResult.Columns {
+		colNameByID[col.ID] = col.Name
+	}
+
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	created, updated := 0, 0
+
+	for _, row := range avResult.Rows {
+		// 申请人/部门使用固定配置值
+		outing := model.OutingRequest{
+			SiyuanID:   row.ID,
+			Applicant:  cfg.Applicant,
+			Department: cfg.Department,
+		}
+
+		for _, cell := range row.Cells {
+			if cell.Value == nil {
+				continue
+			}
+			keyID := cell.Value.KeyID
+
+			// 优先按配置的 Key ID 匹配
+			matched := false
+			if cfg.KeyOutTime != "" && keyID == cfg.KeyOutTime {
+				outing.OutTime = extractCellTime(cell.Value).In(loc)
+				matched = true
+			} else if cfg.KeyReturnTime != "" && keyID == cfg.KeyReturnTime {
+				outing.ReturnTime = extractCellTime(cell.Value).In(loc)
+				matched = true
+			} else if cfg.KeyDestination != "" && keyID == cfg.KeyDestination {
+				outing.Destination = extractCellText(cell.Value)
+				matched = true
+			} else if cfg.KeyReason != "" && keyID == cfg.KeyReason {
+				outing.Reason = extractCellText(cell.Value)
+				matched = true
+			} else if cfg.KeyRemarks != "" && keyID == cfg.KeyRemarks {
+				outing.Remarks = extractCellText(cell.Value)
+				matched = true
+			}
+
+			// 未被 Key ID 匹配到时，按列名自动匹配
+			if !matched {
+				colName := colNameByID[keyID]
+				switch colName {
+				case "外出时间", "申请外出时间":
+					if outing.OutTime.IsZero() {
+						outing.OutTime = extractCellTime(cell.Value).In(loc)
+					}
+				case "返回时间", "预计返回时间":
+					if outing.ReturnTime.IsZero() {
+						outing.ReturnTime = extractCellTime(cell.Value).In(loc)
+					}
+				case "外出地点", "地点":
+					if outing.Destination == "" {
+						outing.Destination = extractCellText(cell.Value)
+					}
+				case "外出事由", "事由":
+					if outing.Reason == "" {
+						outing.Reason = extractCellText(cell.Value)
+					}
+				case "备注说明", "备注":
+					if outing.Remarks == "" {
+						outing.Remarks = extractCellText(cell.Value)
+					}
+				}
+			}
+		}
+
+		// 跳过外出事由为空的行（事由是主键列，空行无意义）
+		if strings.TrimSpace(outing.Reason) == "" {
+			continue
+		}
+
+		// 以 siyuan_id 查找本地是否已存在
+		var existing model.OutingRequest
+		dbResult := s.db.Where("siyuan_id = ?", row.ID).First(&existing)
+
+		now := time.Now()
+		if dbResult.Error != nil {
+			// 不存在，创建新记录
+			outing.Status = model.OutingStatusReady
+			if err := s.db.Create(&outing).Error; err != nil {
+				log.Printf("[同步] 创建外出申请失败(siyuan_id=%s): %v\n", row.ID, err)
+				continue
+			}
+			created++
+		} else {
+			// 已存在，更新字段（申请人/部门也更新，以便设置修改后生效）
+			updates := map[string]interface{}{
+				"applicant":   outing.Applicant,
+				"department":  outing.Department,
+				"destination": outing.Destination,
+				"reason":      outing.Reason,
+				"remarks":     outing.Remarks,
+				"updated_at":  now,
+			}
+			if !outing.OutTime.IsZero() {
+				updates["out_time"] = outing.OutTime
+			}
+			if !outing.ReturnTime.IsZero() {
+				updates["return_time"] = outing.ReturnTime
+			}
+			if err := s.db.Model(&existing).Updates(updates).Error; err != nil {
+				log.Printf("[同步] 更新外出申请失败(siyuan_id=%s): %v\n", row.ID, err)
+				continue
+			}
+			updated++
+		}
+	}
+
+	log.Printf("[同步] 外出申请同步完成: 新建 %d 条, 更新 %d 条\n", created, updated)
+	return created, updated, nil
+}
+
+// ==================== 外出申请同步到思源 ====================
+
+// CreateOutingEntry 在思源笔记外出申请数据库中创建新行
+func (s *SiyuanService) CreateOutingEntry(outing *model.OutingRequest) (string, error) {
+	cfg, err := s.getOutingAVConfig()
+	if err != nil {
+		return "", err
+	}
+
+	if cfg.BlockID == "" {
+		return "", fmt.Errorf("外出申请数据库块 ID (block_id) 未配置")
+	}
+
+	// 使用 addAttributeViewBlocks 创建新行（以事由作为主键列内容）
+	reqBody := AddBlocksRequest{
+		AVID:    cfg.AvID,
+		BlockID: cfg.BlockID,
+		Srcs: []AddBlockSource{
+			{
+				ID:         "",
+				Content:    outing.Reason,
+				IsDetached: true,
+			},
+		},
+		PreviousID: "", // 插入到顶部
+	}
+
+	_, err = s.doRequest("/api/av/addAttributeViewBlocks", reqBody)
+	if err != nil {
+		return "", fmt.Errorf("创建外出申请条目失败: %w", err)
+	}
+
+	log.Printf("[思源API] 成功创建外出申请条目: %s\n", outing.Reason)
+
+	// 创建后从 AV 中查找刚创建的行，获取 siyuan_id
+	siyuanID, err := s.findOutingRowByReason(cfg, outing.Reason)
+	if err != nil {
+		log.Printf("[思源API] 创建成功但未找到对应行 ID: %v\n", err)
+		return "", nil
+	}
+
+	// 找到行后，更新其他列的值
+	if siyuanID != "" {
+		if err := s.updateOutingCells(cfg, siyuanID, outing); err != nil {
+			log.Printf("[思源API] 更新外出申请列值失败: %v\n", err)
+		}
+	}
+
+	return siyuanID, nil
+}
+
+// UpdateOutingEntry 更新思源笔记中外出申请行的所有列
+func (s *SiyuanService) UpdateOutingEntry(outing *model.OutingRequest) error {
+	if outing.SiyuanID == "" {
+		return fmt.Errorf("外出申请缺少思源 ID，无法更新")
+	}
+
+	cfg, err := s.getOutingAVConfig()
+	if err != nil {
+		return err
+	}
+
+	// 更新主键列（事由）
+	if cfg.KeyReason != "" {
+		reqBody := SetBlockAttrRequest{
+			AVID:   cfg.AvID,
+			KeyID:  cfg.KeyReason,
+			ItemID: outing.SiyuanID,
+			Value: SetBlockAttrReqValue{
+				Type:  "block",
+				Block: &BlockValue{Content: outing.Reason},
+			},
+		}
+		if _, err := s.doRequest("/api/av/setAttributeViewBlockAttr", reqBody); err != nil {
+			log.Printf("[思源API] 更新外出事由失败: %v\n", err)
+		}
+	}
+
+	// 更新其他列
+	if err := s.updateOutingCells(cfg, outing.SiyuanID, outing); err != nil {
+		return err
+	}
+
+	log.Printf("[思源API] 成功更新外出申请条目: siyuanID=%s\n", outing.SiyuanID)
+	return nil
+}
+
+// DeleteOutingEntry 删除思源笔记中的外出申请行
+func (s *SiyuanService) DeleteOutingEntry(siyuanID string) error {
+	if siyuanID == "" {
+		return nil
+	}
+
+	cfg, err := s.getOutingAVConfig()
+	if err != nil {
+		return err
+	}
+
+	reqBody := RemoveBlocksRequest{
+		AVID:   cfg.AvID,
+		SrcIDs: []string{siyuanID},
+	}
+
+	_, err = s.doRequest("/api/av/removeAttributeViewBlocks", reqBody)
+	if err != nil {
+		return fmt.Errorf("删除外出申请条目失败: %w", err)
+	}
+
+	log.Printf("[思源API] 成功删除外出申请条目: siyuanID=%s\n", siyuanID)
+	return nil
+}
+
+// SyncOutingToSiyuan 将本地外出申请同步到思源笔记（创建或更新）
+func (s *SiyuanService) SyncOutingToSiyuan(outingID uint) error {
+	var outing model.OutingRequest
+	if err := s.db.First(&outing, outingID).Error; err != nil {
+		return fmt.Errorf("查询外出申请失败: %w", err)
+	}
+
+	if outing.SiyuanID == "" {
+		// 本地记录没有对应的思源行，先创建
+		siyuanID, err := s.CreateOutingEntry(&outing)
+		if err != nil {
+			return fmt.Errorf("在思源笔记创建外出申请失败: %w", err)
+		}
+		if siyuanID != "" {
+			s.db.Model(&outing).Update("siyuan_id", siyuanID)
+		}
+		return nil
+	}
+
+	// 有思源 ID，直接更新
+	if err := s.UpdateOutingEntry(&outing); err != nil {
+		return fmt.Errorf("更新思源笔记外出申请失败: %w", err)
+	}
+
+	return nil
+}
+
+// updateOutingCells 更新外出申请行中除主键外的各列值
+func (s *SiyuanService) updateOutingCells(cfg *OutingAVConfig, rowID string, outing *model.OutingRequest) error {
+	// 渲染 AV 获取各列的实际类型，避免类型不匹配导致写入静默失败
+	colTypeByID := make(map[string]string)
+	avResult, err := s.RenderAVGeneric(cfg.AvID, 1, 1)
+	if err != nil {
+		log.Printf("[思源API] 获取列类型信息失败，将按默认类型写入: %v\n", err)
+	} else {
+		for _, col := range avResult.Columns {
+			colTypeByID[col.ID] = col.Type
+		}
+	}
+
+	// 更新外出地点
+	if cfg.KeyDestination != "" {
+		s.setOutingCellValue(cfg.AvID, cfg.KeyDestination, rowID, colTypeByID[cfg.KeyDestination], outing.Destination, time.Time{})
+	}
+
+	// 更新外出时间
+	if cfg.KeyOutTime != "" && !outing.OutTime.IsZero() {
+		s.setOutingCellValue(cfg.AvID, cfg.KeyOutTime, rowID, colTypeByID[cfg.KeyOutTime], "", outing.OutTime)
+	}
+
+	// 更新返回时间
+	if cfg.KeyReturnTime != "" && !outing.ReturnTime.IsZero() {
+		s.setOutingCellValue(cfg.AvID, cfg.KeyReturnTime, rowID, colTypeByID[cfg.KeyReturnTime], "", outing.ReturnTime)
+	}
+
+	// 更新备注说明
+	if cfg.KeyRemarks != "" {
+		s.setOutingCellValue(cfg.AvID, cfg.KeyRemarks, rowID, colTypeByID[cfg.KeyRemarks], outing.Remarks, time.Time{})
+	}
+
+	return nil
+}
+
+// setOutingCellValue 根据列的实际类型设置单元格值
+// 如果提供了 text 则优先作为文本内容；如果提供了 t 则作为时间内容。
+// 根据 colType 自动选择发送 date 或 text 格式，兼容思源中日期列和文本列。
+func (s *SiyuanService) setOutingCellValue(avID, keyID, rowID, colType, text string, t time.Time) {
+	var val SetBlockAttrReqValue
+
+	isTimeValue := !t.IsZero()
+
+	switch {
+	case colType == "date" && isTimeValue:
+		// 列是日期类型，发送 date 格式
+		val = SetBlockAttrReqValue{
+			Type: "date",
+			Date: &AVDateValue{
+				Content:    t.UnixMilli(),
+				HasEndDate: false,
+				IsNotTime:  false,
+			},
+		}
+	case isTimeValue:
+		// 列是文本或其他类型，将时间格式化为字符串发送
+		loc, _ := time.LoadLocation("Asia/Shanghai")
+		formatted := t.In(loc).Format("2006-01-02 15:04")
+		val = SetBlockAttrReqValue{
+			Type: "text",
+			Text: &AVTextValue{Content: formatted},
+		}
+		log.Printf("[思源API] 列 %s 类型为 %q，时间以文本格式写入: %s\n", keyID, colType, formatted)
+	default:
+		// 普通文本
+		val = SetBlockAttrReqValue{
+			Type: "text",
+			Text: &AVTextValue{Content: text},
+		}
+	}
+
+	reqBody := SetBlockAttrRequest{
+		AVID:   avID,
+		KeyID:  keyID,
+		ItemID: rowID,
+		Value:  val,
+	}
+	if _, err := s.doRequest("/api/av/setAttributeViewBlockAttr", reqBody); err != nil {
+		log.Printf("[思源API] 更新列 %s 失败: %v\n", keyID, err)
+	}
+}
+
+// findOutingRowByReason 从思源 AV 中查找事由匹配的行，返回行 ID
+func (s *SiyuanService) findOutingRowByReason(cfg *OutingAVConfig, reason string) (string, error) {
+	avResult, err := s.RenderAVGeneric(cfg.AvID, 1, 50)
+	if err != nil {
+		return "", fmt.Errorf("渲染外出申请 AV 失败: %w", err)
+	}
+
+	for _, row := range avResult.Rows {
+		for _, cell := range row.Cells {
+			if cell.Value == nil {
+				continue
+			}
+			content := extractCellText(cell.Value)
+			if strings.TrimSpace(content) == strings.TrimSpace(reason) {
+				return row.ID, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("未找到事由为 %q 的行", reason)
 }

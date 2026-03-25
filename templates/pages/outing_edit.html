@@ -1,0 +1,149 @@
+{{define "outing_edit.html"}}
+<!doctype html>
+<html lang="zh-CN">
+{{template "head" .}}
+<body>
+{{template "navbar" .}}
+{{template "flash" .}}
+
+<div class="main-content">
+    <div class="container" style="max-width: 960px">
+        <!-- 面包屑 -->
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb mb-0" style="font-size: 0.85rem">
+                <li class="breadcrumb-item">
+                    <a href="/outings" class="text-decoration-none" style="color: var(--color-primary)">外出申请</a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    {{if .isNew}}新建申请{{else}}编辑申请{{end}}
+                </li>
+            </ol>
+        </nav>
+
+        <!-- 标题栏 -->
+        <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+            <h5 class="mb-0 fw-bold">
+                {{if .isNew}}
+                <i class="bi bi-plus-circle me-2" style="color: var(--color-primary)"></i>新建外出申请
+                {{else}}
+                <i class="bi bi-pencil-square me-2" style="color: var(--color-primary)"></i>编辑外出申请
+                {{end}}
+            </h5>
+            {{if not .isNew}}{{if .outing}}
+            <span class="badge bg-{{outingStatusBadge .outing.Status}}">{{outingStatusText .outing.Status}}</span>
+            {{end}}{{end}}
+        </div>
+
+        <!-- 编辑表单 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="POST" action="{{if .isNew}}/outings/new{{else}}/outings/{{.outing.ID}}/edit{{end}}" id="outingForm">
+                    {{if not .isNew}}{{if .outing}}
+                    <!-- 申请人 & 部门（只读展示，值来自系统设置） -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="bi bi-person me-1"></i>申请人</label>
+                            <div class="form-control-plaintext">{{.outing.Applicant}}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="bi bi-building me-1"></i>部门</label>
+                            <div class="form-control-plaintext">{{.outing.Department}}</div>
+                        </div>
+                    </div>
+                    {{end}}{{end}}
+
+                    <!-- 外出时间 & 返回时间 -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="bi bi-clock me-1"></i>申请外出时间 <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control" name="out_time" required
+                                   value="{{if .isNew}}{{.outTime}}{{else}}{{.outTimeValue}}{{end}}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="bi bi-clock-history me-1"></i>预计返回时间 <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control" name="return_time" required
+                                   value="{{if .isNew}}{{.returnTime}}{{else}}{{.returnTimeValue}}{{end}}">
+                        </div>
+                    </div>
+
+                    <!-- 外出地点 -->
+                    <div class="mb-3">
+                        <label class="form-label"><i class="bi bi-geo-alt me-1"></i>外出地点 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="destination" required
+                               value="{{if .isNew}}{{else}}{{.outing.Destination}}{{end}}"
+                               placeholder="请输入外出目的地">
+                    </div>
+
+                    <!-- 外出事由 -->
+                    <div class="mb-3">
+                        <label class="form-label"><i class="bi bi-card-text me-1"></i>外出事由 <span class="text-danger">*</span></label>
+                        <textarea class="form-control" name="reason" rows="3" required
+                                  placeholder="请输入外出事由">{{if not .isNew}}{{.outing.Reason}}{{end}}</textarea>
+                    </div>
+
+                    <!-- 备注说明 -->
+                    <div class="mb-3">
+                        <label class="form-label"><i class="bi bi-chat-left-text me-1"></i>备注说明</label>
+                        <textarea class="form-control" name="remarks" rows="2"
+                                  placeholder="选填，如有补充说明请填写">{{if not .isNew}}{{.outing.Remarks}}{{end}}</textarea>
+                    </div>
+
+                    <!-- 操作按钮 -->
+                    <div class="d-flex gap-2 pt-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i>{{if .isNew}}创建{{else}}保存{{end}}
+                        </button>
+                        <a href="/outings" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-lg me-1"></i>取消
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 编辑模式下显示申请信息与操作区 -->
+        {{if not .isNew}}{{if .outing}}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-2" style="color: var(--color-primary)"></i>申请信息
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <small class="text-muted d-block mb-1">状态</small>
+                        <p class="mb-0">
+                            <span class="badge bg-{{outingStatusBadge .outing.Status}}">{{outingStatusText .outing.Status}}</span>
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted d-block mb-1">创建时间</small>
+                        <p class="mb-0">{{formatDateTime .outing.CreatedAt}}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted d-block mb-1">发送时间</small>
+                        <p class="mb-0">{{formatDateTimePtr .outing.SentAt}}</p>
+                    </div>
+                </div>
+                {{if ne (outingStatusText .outing.Status) "已发送"}}
+                <div class="pt-2 border-top">
+                    <form method="POST" action="/outings/{{.outing.ID}}/send" class="d-inline" onsubmit="return confirm('确认发送外出申请邮件？')">
+                        <button type="submit" class="btn btn-success btn-sm">
+                            <i class="bi bi-send me-1"></i>发送邮件
+                        </button>
+                    </form>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}{{end}}
+
+    </div>
+</div>
+
+{{template "footer" .}}
+{{template "scripts" .}}
+</body>
+</html>
+{{end}}

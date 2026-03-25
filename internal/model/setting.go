@@ -32,6 +32,7 @@ const (
 	CategorySchedule = "schedule" // 定时任务配置
 	CategoryGeneral  = "general"  // 通用设置
 	CategoryEmail    = "email"    // 邮件内容配置
+	CategoryOuting   = "outing"   // 外出申请配置
 )
 
 // ==================== 设置键名常量 ====================
@@ -79,6 +80,24 @@ const (
 const (
 	KeyGeneralAppName  = "app_name" // 应用名称
 	KeyGeneralTimezone = "timezone" // 时区
+)
+
+// 外出申请相关
+const (
+	KeyOutingRecipients = "recipients" // 外出申请收件人列表（逗号分隔）
+	KeyOutingCc         = "cc"         // 外出申请抄送列表（逗号分隔）
+	KeyOutingSubject    = "subject"    // 外出申请邮件主题模板
+	KeyOutingApplicant  = "applicant"  // 固定申请人姓名
+	KeyOutingDepartment = "department" // 固定部门名称
+
+	// 外出申请思源笔记 AV 配置
+	KeyOutingAvID           = "av_id"           // 外出申请属性视图 ID
+	KeyOutingBlockID        = "block_id"        // 外出申请数据库块 ID
+	KeyOutingKeyOutTime     = "key_out_time"    // 外出时间列 Key ID
+	KeyOutingKeyReturnTime  = "key_return_time" // 返回时间列 Key ID
+	KeyOutingKeyDestination = "key_destination" // 外出地点列 Key ID
+	KeyOutingKeyReason      = "key_reason"      // 外出事由列 Key ID
+	KeyOutingKeyRemarks     = "key_remarks"     // 备注说明列 Key ID
 )
 
 // ==================== 数据库操作方法 ====================
@@ -290,6 +309,20 @@ func InitDefaultSettings(db *gorm.DB) error {
 		// 通用设置默认值
 		{Category: CategoryGeneral, Key: KeyGeneralAppName, Value: "日报助手", Remark: "应用名称"},
 		{Category: CategoryGeneral, Key: KeyGeneralTimezone, Value: "Asia/Shanghai", Remark: "时区"},
+
+		// 外出申请默认值
+		{Category: CategoryOuting, Key: KeyOutingRecipients, Value: "", Remark: "外出申请收件人（逗号分隔）"},
+		{Category: CategoryOuting, Key: KeyOutingCc, Value: "", Remark: "外出申请抄送（逗号分隔）"},
+		{Category: CategoryOuting, Key: KeyOutingSubject, Value: "外出申请 - {{.Applicant}} {{.OutDate}}", Remark: "外出申请邮件主题模板"},
+		{Category: CategoryOuting, Key: KeyOutingApplicant, Value: "", Remark: "固定申请人姓名"},
+		{Category: CategoryOuting, Key: KeyOutingDepartment, Value: "", Remark: "固定部门名称"},
+		{Category: CategoryOuting, Key: KeyOutingAvID, Value: "", Remark: "外出申请属性视图 ID"},
+		{Category: CategoryOuting, Key: KeyOutingBlockID, Value: "", Remark: "外出申请数据库块 ID"},
+		{Category: CategoryOuting, Key: KeyOutingKeyOutTime, Value: "", Remark: "外出时间列 Key ID"},
+		{Category: CategoryOuting, Key: KeyOutingKeyReturnTime, Value: "", Remark: "返回时间列 Key ID"},
+		{Category: CategoryOuting, Key: KeyOutingKeyDestination, Value: "", Remark: "外出地点列 Key ID"},
+		{Category: CategoryOuting, Key: KeyOutingKeyReason, Value: "", Remark: "外出事由列 Key ID"},
+		{Category: CategoryOuting, Key: KeyOutingKeyRemarks, Value: "", Remark: "备注说明列 Key ID"},
 	}
 
 	for _, d := range defaults {

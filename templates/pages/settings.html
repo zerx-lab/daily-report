@@ -126,10 +126,13 @@
                 <i class="bi bi-cloud"></i> 思源笔记
             </button>
             <button type="button" class="tab-link" data-tab="email">
-                <i class="bi bi-at"></i> 邮件内容
+                <i class="bi bi-at"></i> 日报邮件
             </button>
             <button type="button" class="tab-link" data-tab="general">
                 <i class="bi bi-sliders"></i> 通用设置
+            </button>
+            <button type="button" class="tab-link" data-tab="outing">
+                <i class="bi bi-box-arrow-right"></i> 外出申请
             </button>
         </div>
 
@@ -300,12 +303,12 @@
             </div>
         </div>
 
-        <!-- ============ 邮件内容设置 ============ -->
+        <!-- ============ 日报邮件配置 ============ -->
         <div class="settings-section" id="section-email">
             <div class="settings-card card">
                 <div class="card-header">
-                    <h6 class="mb-1"><i class="bi bi-at me-2"></i>邮件内容设置</h6>
-                    <small>配置日报邮件的收件人、抄送人和邮件主题模板</small>
+                    <h6 class="mb-1"><i class="bi bi-at me-2"></i>日报邮件配置</h6>
+                    <small>配置日报邮件的收件人、抄送人和邮件主题模板（与外出申请邮件独立）</small>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="/settings" id="formEmail">
@@ -382,6 +385,149 @@
                         <div class="setting-actions">
                             <button type="submit" class="btn btn-primary btn-sm">
                                 <i class="bi bi-check-lg me-1"></i>保存通用设置
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 外出申请设置 ============ -->
+        <div class="settings-section" id="section-outing">
+            <!-- 邮件配置 -->
+            <div class="settings-card card">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-envelope me-2"></i>外出申请邮件配置</h6>
+                    <small>配置外出申请邮件的独立收件人、抄送人和邮件主题模板（与日报收件人分开）</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings" id="formOutingEmail">
+                        <input type="hidden" name="category" value="outing">
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">申请人（固定）</label>
+                                <input type="text" class="form-control" name="applicant"
+                                       value="{{if .outing}}{{index .outing "applicant"}}{{end}}"
+                                       placeholder="如：马志伟">
+                                <div class="form-text">外出申请表中的固定申请人姓名</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">部门（固定）</label>
+                                <input type="text" class="form-control" name="department"
+                                       value="{{if .outing}}{{index .outing "department"}}{{end}}"
+                                       placeholder="如：技术部">
+                                <div class="form-text">外出申请表中的固定部门名称</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-3" style="border-color:var(--color-border)">
+
+                        <div class="mb-3">
+                            <label class="form-label">收件人</label>
+                            <textarea class="form-control" name="recipients" rows="3"
+                                      placeholder="每行一个邮箱地址，或用逗号分隔">{{if .outing}}{{index .outing "recipients"}}{{end}}</textarea>
+                            <div class="form-text">外出申请邮件的目标收件人（独立于日报收件人），多个地址换行或逗号分隔</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">抄送 (CC)</label>
+                            <textarea class="form-control" name="cc" rows="2"
+                                      placeholder="每行一个邮箱地址，或用逗号分隔（可选）">{{if .outing}}{{index .outing "cc"}}{{end}}</textarea>
+                            <div class="form-text">可选，抄送的邮箱地址</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">邮件主题模板</label>
+                            <input type="text" class="form-control" name="subject"
+                                   value="{{if .outing}}{{index .outing "subject"}}{{end}}"
+                                   placeholder="如: 外出申请 - {{.Applicant}} {{.OutDate}}">
+                            <div class="form-text">
+                                支持变量：<code>{{"{{"}} .Applicant {{"}}"}}</code> 申请人、<code>{{"{{"}} .OutDate {{"}}"}}</code> 外出日期、<code>{{"{{"}} .Department {{"}}"}}</code> 部门、<code>{{"{{"}} .Destination {{"}}"}}</code> 外出地点
+                            </div>
+                        </div>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存邮件配置
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 思源笔记 AV 配置 -->
+            <div class="settings-card card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-cloud me-2"></i>思源笔记数据库配置</h6>
+                    <small>配置外出申请在思源笔记中的属性视图 ID 和列映射，用于同步数据</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings" id="formOutingAV">
+                        <input type="hidden" name="category" value="outing">
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">属性视图 ID (AV ID)</label>
+                                <input type="text" class="form-control form-control-sm" name="av_id"
+                                       value="{{if .outing}}{{index .outing "av_id"}}{{end}}"
+                                       placeholder="外出申请数据库的属性视图 ID">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">数据库块 ID (Block ID)</label>
+                                <input type="text" class="form-control form-control-sm" name="block_id"
+                                       value="{{if .outing}}{{index .outing "block_id"}}{{end}}"
+                                       placeholder="外出申请数据库块 ID（可选）">
+                            </div>
+                        </div>
+
+                        <hr class="my-3" style="border-color:var(--color-border)">
+                        <p class="text-muted mb-3" style="font-size:0.8rem">
+                            <i class="bi bi-info-circle me-1"></i>以下为列 Key ID 映射。如果留空，同步时会按列名自动匹配（申请人、部门、外出时间 等）
+                        </p>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">外出时间列 Key ID</label>
+                                <input type="text" class="form-control form-control-sm" name="key_out_time"
+                                       value="{{if .outing}}{{index .outing "key_out_time"}}{{end}}"
+                                       placeholder="自动按列名匹配">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">返回时间列 Key ID</label>
+                                <input type="text" class="form-control form-control-sm" name="key_return_time"
+                                       value="{{if .outing}}{{index .outing "key_return_time"}}{{end}}"
+                                       placeholder="自动按列名匹配">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">外出地点列 Key ID</label>
+                                <input type="text" class="form-control form-control-sm" name="key_destination"
+                                       value="{{if .outing}}{{index .outing "key_destination"}}{{end}}"
+                                       placeholder="自动按列名匹配">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">外出事由列 Key ID</label>
+                                <input type="text" class="form-control form-control-sm" name="key_reason"
+                                       value="{{if .outing}}{{index .outing "key_reason"}}{{end}}"
+                                       placeholder="自动按列名匹配">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">备注说明列 Key ID</label>
+                                <input type="text" class="form-control form-control-sm" name="key_remarks"
+                                       value="{{if .outing}}{{index .outing "key_remarks"}}{{end}}"
+                                       placeholder="自动按列名匹配">
+                            </div>
+                        </div>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存思源配置
                             </button>
                         </div>
                     </form>

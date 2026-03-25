@@ -1,0 +1,178 @@
+{{define "outings.html"}}
+<!doctype html>
+<html lang="zh-CN">
+{{template "head" .}}
+<body>
+{{template "navbar" .}}
+{{template "flash" .}}
+
+<div class="main-content">
+    <div class="container">
+
+        <!-- 页面标题与操作栏 -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-box-arrow-right me-2" style="color:var(--color-primary)"></i>外出申请</h5>
+            <div class="d-flex gap-2">
+                <a href="/outings/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建外出申请</a>
+            </div>
+        </div>
+
+        <!-- 筛选栏 -->
+        <div class="card mb-4">
+            <div class="card-body py-3">
+                <form method="GET" action="/outings" class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">关键词</label>
+                        <input type="text" class="form-control form-control-sm" name="keyword" value="{{.query.Keyword}}" placeholder="搜索地点/事由…">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">状态</label>
+                        <select class="form-select form-select-sm" name="status">
+                            <option value="">全部</option>
+                            <option value="0" {{if and .query.Status (eq (printf "%d" .query.Status) "0")}}selected{{end}}>草稿</option>
+                            <option value="1" {{if and .query.Status (eq (printf "%d" .query.Status) "1")}}selected{{end}}>待发送</option>
+                            <option value="2" {{if and .query.Status (eq (printf "%d" .query.Status) "2")}}selected{{end}}>已发送</option>
+                            <option value="3" {{if and .query.Status (eq (printf "%d" .query.Status) "3")}}selected{{end}}>发送失败</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">开始日期</label>
+                        <input type="date" class="form-control form-control-sm" name="date_from" value="{{.query.DateFrom}}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">结束日期</label>
+                        <input type="date" class="form-control form-control-sm" name="date_to" value="{{.query.DateTo}}">
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>搜索</button>
+                        <a href="/outings" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-circle me-1"></i>重置</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 外出申请列表 -->
+        <div class="card">
+            <div class="card-body p-0">
+                {{if .outings}}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:48px">#</th>
+                                <th style="width:90px">申请人</th>
+                                <th style="width:120px">外出地点</th>
+                                <th>外出事由</th>
+                                <th style="width:160px">外出时间</th>
+                                <th style="width:80px">状态</th>
+                                <th style="width:165px" class="text-end">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range $i, $o := .outings}}
+                            <tr>
+                                <td class="text-muted">{{rowIndex $.pagination.Page $.pagination.PageSize $i}}</td>
+                                <td class="fw-medium" style="white-space:nowrap">{{$o.Applicant}}</td>
+                                <td style="white-space:nowrap" title="{{$o.Destination}}">{{truncate $o.Destination 15}}</td>
+                                <td class="content-preview" title="{{$o.Reason}}">{{if $o.Reason}}{{truncate $o.Reason 60}}{{else}}<span class="text-muted fst-italic">暂无事由</span>{{end}}</td>
+                                <td style="white-space:nowrap">{{formatDateTime $o.OutTime}}</td>
+                                <td><span class="badge bg-{{outingStatusBadge $o.Status}}">{{outingStatusText $o.Status}}</span></td>
+                                <td class="text-end">
+                                    <div class="d-inline-flex gap-1">
+                                        <a href="/outings/{{$o.ID}}/edit" class="btn btn-outline-primary btn-action" title="编辑"><i class="bi bi-pencil"></i></a>
+                                        {{if ne (outingStatusText $o.Status) "已发送"}}
+                                        <form method="POST" action="/outings/{{$o.ID}}/send" class="d-inline" onsubmit="return confirm('确认发送此外出申请邮件？')">
+                                            <button type="submit" class="btn btn-outline-success btn-action" title="发送邮件"><i class="bi bi-send"></i></button>
+                                        </form>
+                                        {{end}}
+                                        <button type="button" class="btn btn-outline-danger btn-action" title="删除"
+                                                data-bs-toggle="modal" data-bs-target="#deleteModal"
+                                                data-id="{{$o.ID}}" data-applicant="{{$o.Applicant}}" data-destination="{{$o.Destination}}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+                {{else}}
+                <div class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    <p>暂无外出申请记录</p>
+                    <a href="/outings/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建外出申请</a>
+                </div>
+                {{end}}
+            </div>
+
+            <!-- 分页 -->
+            {{if and .pagination (gt .pagination.TotalPage 1)}}
+            <div class="card-footer d-flex flex-wrap justify-content-between align-items-center py-2">
+                <small class="text-muted">共 {{.pagination.Total}} 条记录，第 {{.pagination.Page}} / {{.pagination.TotalPage}} 页</small>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item{{if le .pagination.Page 1}} disabled{{end}}">
+                            <a class="page-link" href="?page={{sub .pagination.Page 1}}{{if .query.Keyword}}&keyword={{.query.Keyword}}{{end}}{{if .query.DateFrom}}&date_from={{.query.DateFrom}}{{end}}{{if .query.DateTo}}&date_to={{.query.DateTo}}{{end}}{{if .query.Status}}&status={{printf "%d" .query.Status}}{{end}}">&laquo;</a>
+                        </li>
+                        {{range pageRange .pagination.Page .pagination.TotalPage}}
+                        <li class="page-item{{if eq . $.pagination.Page}} active{{end}}">
+                            <a class="page-link" href="?page={{.}}{{if $.query.Keyword}}&keyword={{$.query.Keyword}}{{end}}{{if $.query.DateFrom}}&date_from={{$.query.DateFrom}}{{end}}{{if $.query.DateTo}}&date_to={{$.query.DateTo}}{{end}}{{if $.query.Status}}&status={{printf "%d" $.query.Status}}{{end}}">{{.}}</a>
+                        </li>
+                        {{end}}
+                        <li class="page-item{{if ge .pagination.Page .pagination.TotalPage}} disabled{{end}}">
+                            <a class="page-link" href="?page={{add .pagination.Page 1}}{{if .query.Keyword}}&keyword={{.query.Keyword}}{{end}}{{if .query.DateFrom}}&date_from={{.query.DateFrom}}{{end}}{{if .query.DateTo}}&date_to={{.query.DateTo}}{{end}}{{if .query.Status}}&status={{printf "%d" .query.Status}}{{end}}">&raquo;</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {{end}}
+        </div>
+
+    </div>
+</div>
+
+<!-- 删除确认 Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="deleteModalLabel"><i class="bi bi-exclamation-triangle me-2" style="color:var(--color-danger)"></i>确认删除</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">确定要删除 <strong id="deleteApplicant"></strong> 的外出申请吗？</p>
+                <p class="text-muted small mb-1">外出地点：<span id="deleteDestination"></span></p>
+                <p class="text-muted small mb-0">此操作不可撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash me-1"></i>确认删除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{template "footer" .}}
+{{template "scripts" .}}
+<script>
+(function(){
+    var deleteModal = document.getElementById('deleteModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('show.bs.modal', function(e) {
+            var btn = e.relatedTarget;
+            var id = btn.getAttribute('data-id');
+            var applicant = btn.getAttribute('data-applicant');
+            var destination = btn.getAttribute('data-destination');
+            document.getElementById('deleteApplicant').textContent = applicant;
+            document.getElementById('deleteDestination').textContent = destination;
+            document.getElementById('deleteForm').action = '/outings/' + id + '/delete';
+        });
+    }
+})();
+</script>
+</body>
+</html>
+{{end}}

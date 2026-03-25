@@ -323,6 +323,81 @@ func (c *ReportController) SyncFromSiyuan(ctx *gin.Context) {
 	c.jsonOrFlash(ctx, http.StatusOK, "success", msg, "/reports")
 }
 
+// SyncAllFromSiyuan 全局同步：从思源笔记拉取日报和外出申请数据到本地（POST，返回 JSON）
+func (c *ReportController) SyncAllFromSiyuan(ctx *gin.Context) {
+	if c.siyuanSvc == nil {
+		ctx.JSON(http.StatusOK, gin.H{
+			"code":    -1,
+			"message": "思源笔记服务未配置",
+		})
+		return
+	}
+
+	type syncItem struct {
+		Name    string `json:"name"`
+		Created int    `json:"created"`
+		Updated int    `json:"updated"`
+		Error   string `json:"error,omitempty"`
+	}
+
+	items := make([]syncItem, 0, 2)
+
+	// 1. 同步日报
+	rCreated, rUpdated, rErr := c.siyuanSvc.SyncReportsToLocal()
+	item := syncItem{Name: "日报", Created: rCreated, Updated: rUpdated}
+	if rErr != nil {
+		item.Error = rErr.Error()
+		log.Printf("[全局同步] 日报同步失败: %v\n", rErr)
+	}
+	items = append(items, item)
+
+	// 2. 同步外出申请（AV 未配置时跳过，不视为错误）
+	oCreated, oUpdated, oErr := c.siyuanSvc.SyncOutingsToLocal()
+	oItem := syncItem{Name: "外出申请", Created: oCreated, Updated: oUpdated}
+	if oErr != nil {
+		oItem.Error = oErr.Error()
+		log.Printf("[全局同步] 外出申请同步失败: %v\n", oErr)
+	}
+	items = append(items, oItem)
+
+	// 汇总消息
+	totalCreated := rCreated + oCreated
+	totalUpdated := rUpdated + oUpdated
+	hasError := rErr != nil || oErr != nil
+
+	var msgParts []string
+	if rErr == nil {
+		msgParts = append(msgParts, fmt.Sprintf("日报: 新增 %d / 更新 %d", rCreated, rUpdated))
+	} else {
+		msgParts = append(msgParts, "日报: 同步失败")
+	}
+	if oErr == nil && (oCreated > 0 || oUpdated > 0) {
+		msgParts = append(msgParts, fmt.Sprintf("外出申请: 新增 %d / 更新 %d", oCreated, oUpdated))
+	} else if oErr != nil && !strings.Contains(oErr.Error(), "未配置") {
+		msgParts = append(msgParts, "外出申请: 同步失败")
+	}
+
+	msg := strings.Join(msgParts, "；")
+	if msg == "" {
+		msg = "同步完成，无数据变更"
+	}
+
+	code := 0
+	if hasError && totalCreated == 0 && totalUpdated == 0 {
+		code = -1
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    code,
+		"message": msg,
+		"data": gin.H{
+			"items":        items,
+			"totalCreated": totalCreated,
+			"totalUpdated": totalUpdated,
+		},
+	})
+}
+
 // PingSiyuan 测试思源笔记连接（GET/POST）
 func (c *ReportController) PingSiyuan(ctx *gin.Context) {
 	if c.siyuanSvc == nil {
@@ -580,6 +655,7 @@ func (c *ReportController) Settings(ctx *gin.Context) {
 	emailSettings, _ := model.GetSettingsMapByCategory(c.db, model.CategoryEmail)
 	generalSettings, _ := model.GetSettingsMapByCategory(c.db, model.CategoryGeneral)
 	scheduleSettings, _ := model.GetSettingsMapByCategory(c.db, model.CategorySchedule)
+	outingSettings, _ := model.GetSettingsMapByCategory(c.db, model.CategoryOuting)
 
 	ctx.HTML(http.StatusOK, "settings.html", gin.H{
 		"title":    "系统设置",
@@ -589,6 +665,7 @@ func (c *ReportController) Settings(ctx *gin.Context) {
 		"email":    emailSettings,
 		"general":  generalSettings,
 		"schedule": scheduleSettings,
+		"outing":   outingSettings,
 	})
 }
 
@@ -607,6 +684,7 @@ func (c *ReportController) SaveSettings(ctx *gin.Context) {
 		model.CategoryEmail:    {model.KeyEmailRecipients, model.KeyEmailCc, model.KeyEmailSubject},
 		model.CategoryGeneral:  {model.KeyGeneralAppName, model.KeyGeneralTimezone},
 		model.CategorySchedule: {model.KeyScheduleCreateEnabled, model.KeyScheduleCreateCron, model.KeyScheduleSendEnabled, model.KeyScheduleSendCron, model.KeyScheduleSyncEnabled, model.KeyScheduleSyncCron, model.KeyScheduleSkipHoliday},
+		model.CategoryOuting:   {model.KeyOutingRecipients, model.KeyOutingCc, model.KeyOutingSubject, model.KeyOutingApplicant, model.KeyOutingDepartment, model.KeyOutingAvID, model.KeyOutingBlockID, model.KeyOutingKeyOutTime, model.KeyOutingKeyReturnTime, model.KeyOutingKeyDestination, model.KeyOutingKeyReason, model.KeyOutingKeyRemarks},
 	}
 
 	keys, ok := allowedKeys[category]
@@ -615,30 +693,32 @@ func (c *ReportController) SaveSettings(ctx *gin.Context) {
 		return
 	}
 
-	// 收集表单中的键值对
+	// 解析表单数据，只收集表单中实际提交的字段
+	// 避免同分类下不同表单（如外出申请的邮件配置和思源配置）互相覆盖
+	_ = ctx.Request.ParseForm()
 	kvPairs := make(map[string]string)
 	for _, key := range keys {
-		value := ctx.PostForm(key)
-		kvPairs[key] = value
+		if _, submitted := ctx.Request.PostForm[key]; submitted {
+			kvPairs[key] = ctx.PostForm(key)
+		}
 	}
 
-	// 对 checkbox 类型做特殊处理（未勾选时表单不提交该字段）
-	checkboxKeys := map[string]bool{
-		model.KeySMTPUseTLS:            true,
-		model.KeyScheduleCreateEnabled: true,
-		model.KeyScheduleSendEnabled:   true,
-		model.KeyScheduleSyncEnabled:   true,
-		model.KeyScheduleSkipHoliday:   true,
+	// checkbox 特殊处理：未勾选时表单不会提交该字段，需要显式设为 "false"
+	// 按分类定义 checkbox 字段，确保只处理当前分类的 checkbox
+	categoryCheckboxKeys := map[string][]string{
+		model.CategorySMTP:     {model.KeySMTPUseTLS},
+		model.CategorySchedule: {model.KeyScheduleCreateEnabled, model.KeyScheduleSendEnabled, model.KeyScheduleSyncEnabled, model.KeyScheduleSkipHoliday},
 	}
-	for key := range checkboxKeys {
-		if _, exists := kvPairs[key]; exists {
-			if kvPairs[key] == "" || kvPairs[key] == "on" {
-				// 表单中存在该字段但可能值是 "on"
-				if ctx.PostForm(key) != "" {
+	if cbKeys, hasCB := categoryCheckboxKeys[category]; hasCB {
+		for _, key := range cbKeys {
+			if val, exists := kvPairs[key]; exists {
+				// 表单提交了该字段，值为 "on" 或 "true" 都视为勾选
+				if val == "on" || val == "true" {
 					kvPairs[key] = "true"
-				} else {
-					kvPairs[key] = "false"
 				}
+			} else {
+				// 未勾选，显式设为 false
+				kvPairs[key] = "false"
 			}
 		}
 	}

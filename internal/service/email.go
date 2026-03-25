@@ -428,6 +428,20 @@ func (s *EmailService) SendReport(report *model.Report, sendType int) (uint, err
 	return emailLog.ID, nil
 }
 
+// SendCustom 发送自定义邮件（公共方法，供外部控制器调用）
+func (s *EmailService) SendCustom(cfg *SMTPConfig, msg *EmailMessage) error {
+	if cfg == nil {
+		return fmt.Errorf("SMTP 配置不能为空")
+	}
+	if msg == nil {
+		return fmt.Errorf("邮件消息不能为空")
+	}
+	if len(msg.To) == 0 {
+		return fmt.Errorf("收件人列表不能为空")
+	}
+	return s.sendSMTP(cfg, msg)
+}
+
 // sendSMTP 底层 SMTP 发送实现
 func (s *EmailService) sendSMTP(cfg *SMTPConfig, msg *EmailMessage) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)

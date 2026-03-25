@@ -26,9 +26,11 @@ type Router struct {
 	emailSvc  *service.EmailService
 	siyuanSvc *service.SiyuanService
 	scheduler *service.Scheduler
+	outingSvc *service.OutingService
 
-	// 控制器（统一使用 ReportController）
-	ctrl *controller.ReportController
+	// 控制器
+	ctrl       *controller.ReportController
+	outingCtrl *controller.OutingController
 }
 
 // NewRouter 创建路由实例
@@ -40,6 +42,7 @@ func NewRouter(
 	emailSvc *service.EmailService,
 	siyuanSvc *service.SiyuanService,
 	scheduler *service.Scheduler,
+	outingSvc *service.OutingService,
 ) *Router {
 	return &Router{
 		db:          db,
@@ -49,6 +52,7 @@ func NewRouter(
 		emailSvc:    emailSvc,
 		siyuanSvc:   siyuanSvc,
 		scheduler:   scheduler,
+		outingSvc:   outingSvc,
 	}
 }
 
@@ -85,6 +89,12 @@ func (r *Router) Setup(mode string) *gin.Engine {
 		r.emailSvc,
 		r.siyuanSvc,
 		r.scheduler,
+	)
+	r.outingCtrl = controller.NewOutingController(
+		r.db,
+		r.outingSvc,
+		r.emailSvc,
+		r.siyuanSvc,
 	)
 
 	// 注册路由
@@ -204,6 +214,25 @@ func (r *Router) loadTemplates(engine *gin.Engine) {
 			}
 		},
 
+		// ---------- 外出申请状态 ----------
+		"outingStatusText": func(status model.OutingStatus) string {
+			return status.String()
+		},
+		"outingStatusBadge": func(status model.OutingStatus) string {
+			switch status {
+			case model.OutingStatusDraft:
+				return "secondary"
+			case model.OutingStatusReady:
+				return "primary"
+			case model.OutingStatusSent:
+				return "success"
+			case model.OutingStatusFailed:
+				return "danger"
+			default:
+				return "secondary"
+			}
+		},
+
 		// ---------- 邮件发送状态 ----------
 		"emailStatusText": func(status int) string {
 			switch status {
@@ -316,7 +345,8 @@ func (r *Router) registerRoutes(engine *gin.Engine) {
 	}
 
 	// --- 思源笔记同步 ---
-	engine.POST("/sync/from-siyuan", ctrl.SyncFromSiyuan) // 从思源笔记拉取同步
+	engine.POST("/sync/from-siyuan", ctrl.SyncFromSiyuan) // 从思源笔记拉取同步（仅日报）
+	engine.POST("/sync/all", ctrl.SyncAllFromSiyuan)      // 全局同步（日报 + 外出申请）
 	engine.POST("/sync/test-siyuan", ctrl.PingSiyuan)     // 测试思源连接
 
 	// --- 邮件发送记录 ---
@@ -330,6 +360,18 @@ func (r *Router) registerRoutes(engine *gin.Engine) {
 		schedule.POST("/toggle", ctrl.ScheduleToggle)   // 启用/禁用
 		schedule.POST("/cron", ctrl.ScheduleUpdateCron) // 更新 Cron 表达式
 		schedule.POST("/trigger", ctrl.ScheduleTrigger) // 立即执行
+	}
+
+	// --- 外出申请管理 ---
+	outings := engine.Group("/outings")
+	{
+		outings.GET("", r.outingCtrl.List)               // 外出申请列表页
+		outings.GET("/new", r.outingCtrl.CreateForm)     // 新建外出申请表单
+		outings.POST("/new", r.outingCtrl.Create)        // 提交新建
+		outings.GET("/:id/edit", r.outingCtrl.EditForm)  // 编辑外出申请表单
+		outings.POST("/:id/edit", r.outingCtrl.Update)   // 提交更新
+		outings.POST("/:id/delete", r.outingCtrl.Delete) // 删除外出申请
+		outings.POST("/:id/send", r.outingCtrl.Send)     // 发送外出申请邮件
 	}
 
 	// --- 系统设置 ---
