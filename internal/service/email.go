@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"crypto/tls"
+	"embed"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -21,7 +22,7 @@ import (
 // EmailService 邮件发送服务
 type EmailService struct {
 	db            *gorm.DB
-	templateDir   string
+	templatesFS   embed.FS
 	emailTemplate *template.Template
 	mu            sync.Mutex
 }
@@ -66,10 +67,10 @@ type SMTPConfig struct {
 }
 
 // NewEmailService 创建邮件服务实例
-func NewEmailService(db *gorm.DB, templateDir string) *EmailService {
+func NewEmailService(db *gorm.DB, templatesFS embed.FS) *EmailService {
 	svc := &EmailService{
 		db:          db,
-		templateDir: templateDir,
+		templatesFS: templatesFS,
 	}
 
 	// 加载邮件 HTML 模板
@@ -80,9 +81,8 @@ func NewEmailService(db *gorm.DB, templateDir string) *EmailService {
 	return svc
 }
 
-// loadTemplates 加载邮件 HTML 模板文件
+// loadTemplates 从嵌入文件系统加载邮件 HTML 模板
 func (s *EmailService) loadTemplates() error {
-	pattern := s.templateDir + "/email/*.html"
 	tmpl, err := template.New("email").Funcs(template.FuncMap{
 		"nl2br": func(text string) template.HTML {
 			escaped := template.HTMLEscapeString(text)
@@ -91,9 +91,9 @@ func (s *EmailService) loadTemplates() error {
 		"safeHTML": func(text string) template.HTML {
 			return template.HTML(text)
 		},
-	}).ParseGlob(pattern)
+	}).ParseFS(s.templatesFS, "templates/email/*.html")
 	if err != nil {
-		return fmt.Errorf("解析邮件模板失败: %w", err)
+		return fmt.Errorf("解析嵌入邮件模板失败: %w", err)
 	}
 	s.emailTemplate = tmpl
 	return nil

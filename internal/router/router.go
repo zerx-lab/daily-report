@@ -1,7 +1,9 @@
 package router
 
 import (
+	"embed"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"strings"
@@ -18,8 +20,8 @@ import (
 type Router struct {
 	engine      *gin.Engine
 	db          *gorm.DB
-	templateDir string
-	staticDir   string
+	templatesFS embed.FS
+	staticFS    embed.FS
 
 	// 服务层
 	reportSvc *service.ReportService
@@ -36,8 +38,8 @@ type Router struct {
 // NewRouter 创建路由实例
 func NewRouter(
 	db *gorm.DB,
-	templateDir string,
-	staticDir string,
+	templatesFS embed.FS,
+	staticFS embed.FS,
 	reportSvc *service.ReportService,
 	emailSvc *service.EmailService,
 	siyuanSvc *service.SiyuanService,
@@ -46,8 +48,8 @@ func NewRouter(
 ) *Router {
 	return &Router{
 		db:          db,
-		templateDir: templateDir,
-		staticDir:   staticDir,
+		templatesFS: templatesFS,
+		staticFS:    staticFS,
 		reportSvc:   reportSvc,
 		emailSvc:    emailSvc,
 		siyuanSvc:   siyuanSvc,
@@ -79,8 +81,12 @@ func (r *Router) Setup(mode string) *gin.Engine {
 	// 加载 HTML 模板
 	r.loadTemplates(engine)
 
-	// 注册静态文件
-	engine.Static("/static", r.staticDir)
+	// 注册静态文件（从嵌入 FS）
+	staticSubFS, err := fs.Sub(r.staticFS, "static")
+	if err != nil {
+		log.Fatalf("[路由] 创建静态文件子系统失败: %v\n", err)
+	}
+	engine.StaticFS("/static", http.FS(staticSubFS))
 
 	// 初始化控制器
 	r.ctrl = controller.NewReportController(
@@ -309,12 +315,33 @@ func (r *Router) loadTemplates(engine *gin.Engine) {
 		},
 	}
 
-	engine.SetFuncMap(funcMap)
+	// 从嵌入文件系统收集所有 HTML 模板文件路径
+	var templateFiles []string
+	if err := fs.WalkDir(r.templatesFS, "templates", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".html") {
+			templateFiles = append(templateFiles, path)
+		}
+		return nil
+	}); err != nil {
+		log.Fatalf("[路由] 遍历嵌入模板目录失败: %v\n", err)
+	}
 
-	// 加载模板文件（templates 目录下所有 .html，含子目录）
-	pattern := r.templateDir + "/**/*"
-	engine.LoadHTMLGlob(pattern)
-	log.Printf("[路由] HTML 模板已加载: %s\n", pattern)
+	if len(templateFiles) == 0 {
+		log.Fatalf("[路由] 未找到任何嵌入的 HTML 模板文件")
+	}
+
+	// 从嵌入 FS 解析所有模板
+	tmpl := template.New("").Funcs(funcMap)
+	tmpl, err := tmpl.ParseFS(r.templatesFS, templateFiles...)
+	if err != nil {
+		log.Fatalf("[路由] 解析嵌入模板失败: %v\n", err)
+	}
+
+	engine.SetHTMLTemplate(tmpl)
+	log.Printf("[路由] HTML 嵌入模板已加载: %d 个文件\n", len(templateFiles))
 }
 
 // ==================== 路由注册 ====================
