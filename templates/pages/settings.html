@@ -134,6 +134,12 @@
             <button type="button" class="tab-link" data-tab="outing">
                 <i class="bi bi-box-arrow-right"></i> 外出申请
             </button>
+            <button type="button" class="tab-link" data-tab="ai">
+                <i class="bi bi-stars"></i> AI 大模型
+            </button>
+            <button type="button" class="tab-link" data-tab="bot">
+                <i class="bi bi-robot"></i> QQ 机器人
+            </button>
         </div>
 
         <!-- ============ SMTP 设置 ============ -->
@@ -544,6 +550,322 @@
             </div>
         </div>
 
+        <!-- ============ AI 大模型设置 ============ -->
+        <div class="settings-section" id="section-ai">
+            <div class="settings-card card">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-stars me-2"></i>AI 大模型配置</h6>
+                    <small>配置 OpenAI 兼容的大模型 API，用于 QQ 机器人智能对话（支持 DeepSeek、通义千问、Kimi 等国内厂商）</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings/save-ai" id="formAI">
+
+                        <div class="row mb-3">
+                            <div class="col-sm-8">
+                                <label class="form-label">API 基础地址</label>
+                                <input type="text" class="form-control" name="base_url"
+                                       value="{{if .ai}}{{index .ai "base_url"}}{{end}}"
+                                       placeholder="https://api.deepseek.com/v1">
+                                <div class="form-text">OpenAI 兼容的 API 地址，末尾不需要加 <code>/chat/completions</code></div>
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label">模型名称</label>
+                                <input type="text" class="form-control" name="model"
+                                       value="{{if .ai}}{{index .ai "model"}}{{end}}"
+                                       placeholder="deepseek-chat">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-12">
+                                <label class="form-label">API Key</label>
+                                <div class="password-wrapper">
+                                    <input type="password" class="form-control" name="api_key" id="aiApiKey"
+                                           value="{{if .ai}}{{index .ai "api_key"}}{{end}}"
+                                           placeholder="sk-xxx（留空不修改）">
+                                    <button type="button" class="toggle-pw" onclick="togglePassword('aiApiKey', this)">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">最大 Token 数</label>
+                                <input type="number" class="form-control" name="max_tokens"
+                                       value="{{if .ai}}{{index .ai "max_tokens"}}{{end}}"
+                                       placeholder="2048" min="100" max="128000">
+                                <div class="form-text">单次回复的最大 token 数量</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">采样温度 (Temperature)</label>
+                                <input type="number" class="form-control" name="temperature"
+                                       value="{{if .ai}}{{index .ai "temperature"}}{{end}}"
+                                       placeholder="0.7" min="0" max="2" step="0.1">
+                                <div class="form-text">0 更精确，2 更随机。推荐日报场景用 0.3~0.7</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">自定义系统提示词（可选）</label>
+                            <textarea class="form-control" name="system_prompt" rows="4"
+                                      placeholder="留空使用内置提示词。内置提示词已包含日报管理、外出申请等工具调用说明。">{{if .ai}}{{index .ai "system_prompt"}}{{end}}</textarea>
+                            <div class="form-text">如需自定义 AI 的角色行为，可在此填写。留空将使用内置的日报助手提示词。</div>
+                        </div>
+
+                        <hr class="my-3" style="border-color:var(--color-border)">
+                        <p class="text-muted mb-3" style="font-size:0.8rem">
+                            <i class="bi bi-info-circle me-1"></i>常用兼容 API 地址：
+                            <code>DeepSeek: https://api.deepseek.com/v1</code> ·
+                            <code>通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1</code> ·
+                            <code>Kimi: https://api.moonshot.cn/v1</code> ·
+                            <code>OpenAI: https://api.openai.com/v1</code>
+                        </p>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存 AI 配置
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="testAI()">
+                                <i class="bi bi-lightning me-1"></i>测试连接
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ QQ 机器人设置 ============ -->
+        <div class="settings-section" id="section-bot">
+
+            <!-- ── 卡片1：基础配置 ── -->
+            <div class="settings-card card">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-robot me-2"></i>QQ 机器人基础配置</h6>
+                    <small>配置 NapCat（OneBot 11 协议）QQ 机器人，对接 AI 实现智能日报管理</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings/save-bot" id="formBot">
+
+                        <!-- 运行状态指示 -->
+                        <div class="mb-3 p-2 rounded" style="background:var(--color-bg-secondary);border:1px solid var(--color-border);">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <i class="bi bi-circle-fill me-1" style="font-size:0.55rem;color:{{if .botRunning}}var(--color-success){{else}}var(--color-text-muted){{end}}"></i>
+                                    <span class="fw-semibold" style="font-size:0.85rem">
+                                        机器人状态：{{if .botRunning}}<span style="color:var(--color-success)">运行中</span>{{else}}<span class="text-muted">未启动</span>{{end}}
+                                    </span>
+                                </div>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="reloadBot()" style="font-size:0.78rem">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>重启服务
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 启用开关 -->
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="enabled" id="botEnabled"
+                                       value="true" {{if .bot}}{{if eq (index .bot "enabled") "true"}}checked{{end}}{{end}}>
+                                <label class="form-check-label fw-semibold" for="botEnabled">
+                                    <i class="bi bi-power me-1"></i>启用 QQ 机器人
+                                </label>
+                            </div>
+                            <div class="form-text">启用后机器人才会接收和处理 QQ 消息</div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-8">
+                                <label class="form-label">NapCat HTTP API 地址 <span class="text-muted">(发送消息用)</span></label>
+                                <input type="text" class="form-control" name="api_url"
+                                       value="{{if .bot}}{{index .bot "api_url"}}{{end}}"
+                                       placeholder="http://20.40.96.52:6099">
+                                <div class="form-text">NapCat 的 OneBot HTTP API 地址，机器人通过它向 QQ 发送回复</div>
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label">Access Token</label>
+                                <div class="password-wrapper">
+                                    <input type="password" class="form-control" name="access_token" id="botAccessToken"
+                                           value="{{if .bot}}{{index .bot "access_token"}}{{end}}"
+                                           placeholder="留空不鉴权">
+                                    <button type="button" class="toggle-pw" onclick="togglePassword('botAccessToken', this)">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">与 NapCat 端配置一致</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">QQ 号白名单</label>
+                            <input type="text" class="form-control" name="allowed_users"
+                                   value="{{if .bot}}{{index .bot "allowed_users"}}{{end}}"
+                                   placeholder="如: 123456789,987654321">
+                            <div class="form-text">只响应这些 QQ 号的消息，多个用英文逗号分隔。<strong>留空则不响应任何人</strong>（安全考虑）</div>
+                        </div>
+
+                        <hr class="my-3" style="border-color:var(--color-border)">
+
+                        <!-- ── 消息接收通道 ── -->
+                        <p class="mb-2 fw-semibold" style="font-size:0.9rem"><i class="bi bi-arrow-down-circle me-1"></i>消息接收通道</p>
+
+                        <!-- 通道1：HTTP POST 上报（默认，始终可用） -->
+                        <div class="mb-3 p-3 rounded" style="background: var(--color-bg-secondary); border: 1px solid var(--color-border);">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-success me-2">推荐 · 默认</span>
+                                <span class="fw-semibold" style="font-size:0.85rem"><i class="bi bi-globe me-1"></i>HTTP POST 事件上报</span>
+                            </div>
+                            <p class="text-muted mb-2" style="font-size:0.8rem">
+                                NapCat 将消息事件通过 HTTP POST 发送到本系统。<strong>复用现有 Web 端口，无需额外配置，始终可用。</strong>
+                            </p>
+                            <div class="p-2 rounded" style="background:var(--color-bg);border:1px dashed var(--color-border);">
+                                <p class="mb-1" style="font-size:0.8rem"><strong>NapCat 侧配置步骤：</strong></p>
+                                <ol class="mb-0 ps-3" style="font-size:0.78rem; color:var(--color-text-secondary)">
+                                    <li>打开 NapCat WebUI → 网络配置</li>
+                                    <li>添加 <strong>HTTP 上报</strong> 连接</li>
+                                    <li>上报地址填写：<code id="httpReportUrl">http://本机IP:{{if .bot}}{{if index .bot "ws_port"}}{{end}}{{end}}当前端口/onebot/v11/http</code>
+                                        <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="copyHttpUrl()" title="复制地址" style="font-size:0.75rem"><i class="bi bi-clipboard"></i></button>
+                                    </li>
+                                    <li>如有 Access Token，填写与上方一致的值</li>
+                                    <li>保存并启用</li>
+                                </ol>
+                            </div>
+                        </div>
+
+                        <!-- 通道2：反向 WebSocket（可选） -->
+                        <div class="mb-3 p-3 rounded" style="border: 1px solid var(--color-border);">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-secondary me-2">可选</span>
+                                <span class="fw-semibold" style="font-size:0.85rem"><i class="bi bi-broadcast me-1"></i>反向 WebSocket</span>
+                            </div>
+                            <p class="text-muted mb-2" style="font-size:0.8rem">
+                                NapCat 主动建立 WebSocket 长连接。需要额外监听端口，适合追求更低延迟或同时使用双通道的场景。<strong>不启用不影响机器人正常工作。</strong>
+                            </p>
+
+                            <div class="row">
+                                <div class="col-sm-4">
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input" name="ws_enabled" id="botWsEnabled"
+                                               value="true" {{if .bot}}{{if eq (index .bot "ws_enabled") "true"}}checked{{end}}{{end}}>
+                                        <label class="form-check-label" for="botWsEnabled">
+                                            启用反向 WebSocket
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <label class="form-label">监听地址</label>
+                                    <input type="text" class="form-control form-control-sm" name="ws_host"
+                                           value="{{if .bot}}{{index .bot "ws_host"}}{{end}}"
+                                           placeholder="0.0.0.0">
+                                </div>
+                                <div class="col-sm-4">
+                                    <label class="form-label">监听端口</label>
+                                    <input type="number" class="form-control form-control-sm" name="ws_port"
+                                           value="{{if .bot}}{{index .bot "ws_port"}}{{end}}"
+                                           placeholder="8788" min="1024" max="65535">
+                                </div>
+                            </div>
+                            <div class="form-text mt-1">
+                                NapCat 侧配置反向 WS 地址为：<code>ws://本机IP:<span class="ws-port-display">{{if .bot}}{{index .bot "ws_port"}}{{end}}</span>/onebot/v11/ws</code>
+                            </div>
+                        </div>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存机器人配置
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="testBotSend()">
+                                <i class="bi bi-send me-1"></i>测试发送消息
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ── 卡片2：NapCat 快速配置指引 ── -->
+            <div class="settings-card card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-signpost-split me-2"></i>NapCat 快速配置指引</h6>
+                    <small>最少步骤让机器人跑起来</small>
+                </div>
+                <div class="card-body" style="font-size:0.83rem">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="fw-semibold mb-2"><i class="bi bi-1-circle me-1 text-primary"></i>本系统侧（当前页面）</p>
+                            <ol class="ps-3 mb-3" style="line-height:1.9">
+                                <li>勾选 <strong>启用 QQ 机器人</strong></li>
+                                <li>填写 <strong>NapCat HTTP API 地址</strong>（NapCat 运行地址）</li>
+                                <li>填写 <strong>QQ 号白名单</strong>（你的 QQ 号）</li>
+                                <li>保存并重启服务</li>
+                            </ol>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="fw-semibold mb-2"><i class="bi bi-2-circle me-1 text-primary"></i>NapCat 侧（NapCat WebUI）</p>
+                            <ol class="ps-3 mb-3" style="line-height:1.9">
+                                <li>启用 <strong>HTTP 上报</strong></li>
+                                <li>上报地址填本系统的 <code>/onebot/v11/http</code></li>
+                                <li>启用 <strong>HTTP 服务</strong>（机器人回消息用）</li>
+                                <li>保存，向机器人发消息测试</li>
+                            </ol>
+                        </div>
+                    </div>
+                    <div class="alert alert-info py-2 px-3 mb-0 d-flex align-items-start" style="font-size:0.8rem" role="alert">
+                        <i class="bi bi-lightbulb me-2 mt-1"></i>
+                        <div>
+                            <strong>只需 HTTP 上报即可工作</strong>，反向 WebSocket 是可选的。两者可同时启用互为备份。
+                            消息发送始终通过 NapCat 的 HTTP API 地址。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── 卡片3：使用说明 ── -->
+            <div class="settings-card card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-chat-dots me-2"></i>对话示例</h6>
+                    <small>向机器人发送自然语言，AI 自动理解意图并调用工具完成操作</small>
+                </div>
+                <div class="card-body" style="font-size:0.85rem">
+                    <table class="table table-sm table-bordered mb-0" style="font-size:0.82rem">
+                        <thead class="table-light">
+                            <tr><th style="width:42%">你发送的消息</th><th>机器人行为</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>今天日报：参加项目评审会议，完成接口开发</code></td>
+                                <td>检查今日日报 → 不存在则创建，已有则<strong>追加</strong>到已有内容之后</td>
+                            </tr>
+                            <tr>
+                                <td><code>补充一下，晚上加班修复了线上BUG</code></td>
+                                <td>读取今日已有内容，理解后将新内容追加合并</td>
+                            </tr>
+                            <tr>
+                                <td><code>看看今天日报</code></td>
+                                <td>查看今日日报内容和状态</td>
+                            </tr>
+                            <tr>
+                                <td><code>最近的日报</code></td>
+                                <td>显示最近几天的日报列表摘要</td>
+                            </tr>
+                            <tr>
+                                <td><code>发送今天日报</code></td>
+                                <td>通过邮件发送今日日报</td>
+                            </tr>
+                            <tr>
+                                <td><code>明天上午9点到下午3点去市政务中心办营业执照</code></td>
+                                <td>自动创建外出申请（申请人/部门从设置读取）</td>
+                            </tr>
+                            <tr>
+                                <td><code>发送外出申请</code></td>
+                                <td>发送最新外出申请的邮件</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -742,6 +1064,131 @@
                 showAlert(result.message || '同步成功！', 'success');
             } else {
                 showAlert(result.message || '同步失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            showAlert('请求失败: ' + err.message, 'error');
+        });
+    };
+
+    // ========== 测试 AI 连接 ==========
+    window.testAI = function() {
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>测试中…';
+
+        fetch('/settings/test-ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(result) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            if (result.code === 0) {
+                showAlert(result.message || 'AI 连接测试成功！', 'success');
+            } else {
+                showAlert(result.message || 'AI 连接测试失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            showAlert('请求失败: ' + err.message, 'error');
+        });
+    };
+
+    // ========== 测试机器人发送消息 ==========
+    window.testBotSend = function() {
+        var allowedInput = document.querySelector('input[name="allowed_users"]');
+        var defaultQQ = '';
+        if (allowedInput && allowedInput.value) {
+            defaultQQ = allowedInput.value.split(',')[0].trim();
+        }
+        var qq = prompt('请输入目标 QQ 号（留空则发给白名单第一个用户）：', defaultQQ);
+        if (qq === null) return; // 取消
+
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>发送中…';
+
+        fetch('/api/v1/bot/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ qq: parseInt(qq) || 0 })
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(result) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            if (result.code === 0) {
+                showAlert(result.message || '测试消息发送成功！请在 QQ 上查收。', 'success');
+            } else {
+                showAlert(result.message || '测试消息发送失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            showAlert('请求失败: ' + err.message, 'error');
+        });
+    };
+
+    // ========== 复制 HTTP 上报地址 ==========
+    window.copyHttpUrl = function() {
+        var url = window.location.protocol + '//' + window.location.host + '/onebot/v11/http';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function() {
+                showAlert('已复制上报地址: ' + url, 'success');
+            });
+        } else {
+            prompt('请手动复制以下地址：', url);
+        }
+    };
+
+    // 页面加载时自动填充 HTTP 上报 URL 显示
+    (function() {
+        var el = document.getElementById('httpReportUrl');
+        if (el) {
+            el.textContent = window.location.protocol + '//' + window.location.host + '/onebot/v11/http';
+        }
+        // 同步 WS 端口到显示
+        var wsPortInput = document.querySelector('input[name="ws_port"]');
+        var wsPortDisplay = document.querySelector('.ws-port-display');
+        if (wsPortInput && wsPortDisplay) {
+            wsPortDisplay.textContent = wsPortInput.value || '8788';
+            wsPortInput.addEventListener('input', function() {
+                wsPortDisplay.textContent = this.value || '8788';
+            });
+        }
+    })();
+
+    // ========== 重启机器人 ==========
+    window.reloadBot = function() {
+        if (!confirm('确认重启 QQ 机器人服务？')) return;
+
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>重启中…';
+
+        fetch('/api/v1/bot/reload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(result) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            if (result.code === 0) {
+                showAlert(result.message || '机器人已重启！', 'success');
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                showAlert(result.message || '重启失败', 'error');
             }
         })
         .catch(function(err) {

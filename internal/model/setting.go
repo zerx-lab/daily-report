@@ -33,6 +33,8 @@ const (
 	CategoryGeneral  = "general"  // 通用设置
 	CategoryEmail    = "email"    // 邮件内容配置
 	CategoryOuting   = "outing"   // 外出申请配置
+	CategoryAI       = "ai"       // AI 大模型配置
+	CategoryBot      = "bot"      // QQ 机器人配置
 )
 
 // ==================== 设置键名常量 ====================
@@ -99,6 +101,27 @@ const (
 	KeyOutingKeyDestination = "key_destination" // 外出地点列 Key ID
 	KeyOutingKeyReason      = "key_reason"      // 外出事由列 Key ID
 	KeyOutingKeyRemarks     = "key_remarks"     // 备注说明列 Key ID
+)
+
+// AI 大模型相关
+const (
+	KeyAIBaseURL      = "base_url"      // API 基础地址（兼容 OpenAI 接口）
+	KeyAIApiKey       = "api_key"       // API Key
+	KeyAIModel        = "model"         // 模型名称（如 deepseek-chat）
+	KeyAIMaxTokens    = "max_tokens"    // 最大生成 token 数
+	KeyAITemperature  = "temperature"   // 采样温度
+	KeyAISystemPrompt = "system_prompt" // 自定义系统提示词（可选，留空使用内置）
+)
+
+// QQ 机器人相关
+const (
+	KeyBotEnabled      = "enabled"       // 是否启用机器人
+	KeyBotAPIURL       = "api_url"       // NapCat OneBot HTTP API 地址
+	KeyBotAccessToken  = "access_token"  // OneBot access_token 鉴权
+	KeyBotAllowedUsers = "allowed_users" // 允许的 QQ 号白名单（逗号分隔）
+	KeyBotWsEnabled    = "ws_enabled"    // 是否启用反向 WebSocket
+	KeyBotWsHost       = "ws_host"       // 反向 WebSocket 监听地址
+	KeyBotWsPort       = "ws_port"       // 反向 WebSocket 监听端口
 )
 
 // ==================== 数据库操作方法 ====================
@@ -313,6 +336,23 @@ func InitDefaultSettings(db *gorm.DB) error {
 		// 通用设置默认值
 		{Category: CategoryGeneral, Key: KeyGeneralAppName, Value: "日报助手", Remark: "应用名称"},
 		{Category: CategoryGeneral, Key: KeyGeneralTimezone, Value: "Asia/Shanghai", Remark: "时区"},
+
+		// AI 大模型默认值
+		{Category: CategoryAI, Key: KeyAIBaseURL, Value: "https://api.deepseek.com/v1", Remark: "OpenAI 兼容 API 地址"},
+		{Category: CategoryAI, Key: KeyAIApiKey, Value: "", Remark: "API Key", Encrypted: true},
+		{Category: CategoryAI, Key: KeyAIModel, Value: "deepseek-chat", Remark: "模型名称"},
+		{Category: CategoryAI, Key: KeyAIMaxTokens, Value: "2048", Remark: "最大生成 token 数"},
+		{Category: CategoryAI, Key: KeyAITemperature, Value: "0.7", Remark: "采样温度（0-2）"},
+		{Category: CategoryAI, Key: KeyAISystemPrompt, Value: "", Remark: "自定义系统提示词（留空使用内置）"},
+
+		// QQ 机器人默认值
+		{Category: CategoryBot, Key: KeyBotEnabled, Value: "false", Remark: "启用 QQ 机器人"},
+		{Category: CategoryBot, Key: KeyBotAPIURL, Value: "http://20.40.96.52:6099", Remark: "NapCat OneBot HTTP API 地址"},
+		{Category: CategoryBot, Key: KeyBotAccessToken, Value: "", Remark: "OneBot access_token", Encrypted: true},
+		{Category: CategoryBot, Key: KeyBotAllowedUsers, Value: "", Remark: "允许的 QQ 号（逗号分隔）"},
+		{Category: CategoryBot, Key: KeyBotWsEnabled, Value: "false", Remark: "启用反向 WebSocket 接收消息"},
+		{Category: CategoryBot, Key: KeyBotWsHost, Value: "0.0.0.0", Remark: "反向 WebSocket 监听地址"},
+		{Category: CategoryBot, Key: KeyBotWsPort, Value: "8788", Remark: "反向 WebSocket 监听端口"},
 
 		// 外出申请默认值
 		{Category: CategoryOuting, Key: KeyOutingRecipients, Value: "", Remark: "外出申请收件人（逗号分隔）"},

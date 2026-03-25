@@ -51,6 +51,8 @@ func main() {
 	emailSvc := service.NewEmailService(db, dailyreport.TemplatesFS)
 	siyuanSvc := service.NewSiyuanService(db)
 	outingSvc := service.NewOutingService(db)
+	aiSvc := service.NewAIService(db, reportSvc, outingSvc, emailSvc)
+	botSvc := service.NewBotService(db, aiSvc)
 	log.Println("[启动] 业务服务初始化完成")
 
 	// ==================== 5. 创建并启动定时调度器 ====================
@@ -69,12 +71,18 @@ func main() {
 		log.Println("[启动] 定时调度器启动成功")
 	}
 
-	// ==================== 6. 配置路由 ====================
-	r := router.NewRouter(db, dailyreport.TemplatesFS, dailyreport.StaticFS, reportSvc, emailSvc, siyuanSvc, scheduler, outingSvc)
+	// ==================== 6. 启动 QQ 机器人服务 ====================
+	if err := botSvc.Start(ctx); err != nil {
+		log.Printf("[警告] 机器人服务启动失败: %v\n", err)
+		// 机器人启动失败不影响 Web 服务，继续运行
+	}
+
+	// ==================== 7. 配置路由 ====================
+	r := router.NewRouter(db, dailyreport.TemplatesFS, dailyreport.StaticFS, reportSvc, emailSvc, siyuanSvc, scheduler, outingSvc, aiSvc, botSvc)
 	engine := r.Setup(cfg.Server.Mode)
 	log.Println("[启动] 路由配置完成")
 
-	// ==================== 7. 启动 HTTP 服务器 ====================
+	// ==================== 8. 启动 HTTP 服务器 ====================
 	addr := cfg.Addr()
 	srv := &http.Server{
 		Addr:         addr,
@@ -98,15 +106,18 @@ func main() {
 		}
 	}()
 
-	// ==================== 8. 优雅关闭 ====================
+	// ==================== 9. 优雅关闭 ====================
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 
 	log.Printf("\n[关闭] 收到信号 %v，正在优雅关闭...\n", sig)
 
-	// 取消 context，通知调度器停止
+	// 取消 context，通知调度器和机器人停止
 	cancel()
+
+	// 停止机器人服务
+	botSvc.Stop()
 
 	// 给 HTTP 服务器 10 秒的关闭时间
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

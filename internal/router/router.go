@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"embed"
 	"html/template"
 	"io/fs"
@@ -29,6 +30,8 @@ type Router struct {
 	siyuanSvc *service.SiyuanService
 	scheduler *service.Scheduler
 	outingSvc *service.OutingService
+	aiSvc     *service.AIService
+	botSvc    *service.BotService
 
 	// 控制器
 	ctrl       *controller.ReportController
@@ -45,6 +48,8 @@ func NewRouter(
 	siyuanSvc *service.SiyuanService,
 	scheduler *service.Scheduler,
 	outingSvc *service.OutingService,
+	aiSvc *service.AIService,
+	botSvc *service.BotService,
 ) *Router {
 	return &Router{
 		db:          db,
@@ -55,6 +60,8 @@ func NewRouter(
 		siyuanSvc:   siyuanSvc,
 		scheduler:   scheduler,
 		outingSvc:   outingSvc,
+		aiSvc:       aiSvc,
+		botSvc:      botSvc,
 	}
 }
 
@@ -402,7 +409,7 @@ func (r *Router) registerRoutes(engine *gin.Engine) {
 	}
 
 	// --- 系统设置 ---
-	engine.GET("/settings", ctrl.Settings)      // 设置页面
+	engine.GET("/settings", r.settingsPage)     // 设置页面（增强版，含 AI/Bot）
 	engine.POST("/settings", ctrl.SaveSettings) // 保存设置
 
 	// --- SMTP 测试 ---
@@ -420,6 +427,15 @@ func (r *Router) registerRoutes(engine *gin.Engine) {
 		api.PUT("/reports/:id", ctrl.APIUpdateReport)
 		api.DELETE("/reports/:id", ctrl.APIDeleteReport)
 		api.POST("/reports/:id/send", ctrl.APISendReport)
+
+		// AI 对话接口
+		api.POST("/ai/chat", r.apiAIChat)
+		api.POST("/ai/test", r.apiAITest)
+
+		// 机器人状态接口
+		api.GET("/bot/status", r.apiBotStatus)
+		api.POST("/bot/reload", r.apiBotReload)
+		api.POST("/bot/test", r.apiBotTest)
 
 		// 同步
 		api.POST("/sync/pull", ctrl.SyncFromSiyuan)
@@ -476,6 +492,17 @@ func (r *Router) registerRoutes(engine *gin.Engine) {
 		})
 	}
 
+	// 设置页面 - AI / 机器人配置保存
+	engine.POST("/settings/save-ai", r.saveAISettings)
+	engine.POST("/settings/save-bot", r.saveBotSettings)
+	engine.POST("/settings/test-ai", r.testAIConnection)
+
+	// ====================== OneBot 事件上报（NapCat HTTP POST） ======================
+	// NapCat 侧配置 HTTP 上报地址为: http://<本机IP>:<Web端口>/onebot/v11/http
+	// 复用现有 Gin 端口，无需额外监听，零配置即可接收消息
+	engine.POST("/onebot/v11/http", r.onebotHTTPHandler)
+	engine.POST("/onebot/v11/http/", r.onebotHTTPHandler) // 兼容末尾斜杠
+
 	// ====================== 通用路由 ======================
 
 	// 健康检查（无前缀）
@@ -503,6 +530,236 @@ func (r *Router) registerRoutes(engine *gin.Engine) {
 	})
 
 	log.Println("[路由] 所有路由注册完成")
+}
+
+// ==================== OneBot HTTP 事件上报处理器 ====================
+
+// onebotHTTPHandler 接收 NapCat 通过 HTTP POST 上报的 OneBot 11 事件
+// 这是机器人接收消息的默认通道，无需额外端口
+func (r *Router) onebotHTTPHandler(c *gin.Context) {
+	if r.botSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "failed", "retcode": 1, "message": "bot service not initialized"})
+		return
+	}
+	// 委托给 BotService 处理（含鉴权、解析、异步分发）
+	r.botSvc.HandleHTTPEvent(c.Writer, c.Request)
+}
+
+// ==================== AI / 机器人相关处理器 ====================
+
+// apiAIChat AI 对话接口
+func (r *Router) apiAIChat(c *gin.Context) {
+	var req struct {
+		Message string `json:"message" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	if r.aiSvc == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": "AI 服务未初始化"})
+		return
+	}
+
+	reply, err := r.aiSvc.Chat(c.Request.Context(), req.Message)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"reply": reply}})
+}
+
+// apiAITest 测试 AI 连接
+func (r *Router) apiAITest(c *gin.Context) {
+	if r.aiSvc == nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": "AI 服务未初始化"})
+		return
+	}
+
+	info, err := r.aiSvc.TestConnection(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "AI 连接测试成功", "data": gin.H{"info": info}})
+}
+
+// apiBotStatus 获取机器人状态
+func (r *Router) apiBotStatus(c *gin.Context) {
+	if r.botSvc == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"running": false, "message": "机器人服务未初始化"}})
+		return
+	}
+
+	cfg := r.botSvc.GetConfig()
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": gin.H{
+			"running": r.botSvc.IsRunning(),
+			"enabled": cfg != nil && cfg.Enabled,
+		},
+	})
+}
+
+// apiBotTest 测试发送消息给白名单用户
+func (r *Router) apiBotTest(c *gin.Context) {
+	if r.botSvc == nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": "机器人服务未初始化"})
+		return
+	}
+
+	var req struct {
+		QQ int64 `json:"qq"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	detail, err := r.botSvc.SendTestMessage(req.QQ)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": detail})
+}
+
+// apiBotReload 重启机器人服务
+func (r *Router) apiBotReload(c *gin.Context) {
+	if r.botSvc == nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": "机器人服务未初始化"})
+		return
+	}
+
+	ctx := context.Background()
+	if err := r.botSvc.Reload(ctx); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": "重启失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "机器人服务已重启"})
+}
+
+// saveAISettings 保存 AI 配置
+func (r *Router) saveAISettings(c *gin.Context) {
+	kvPairs := map[string]string{
+		model.KeyAIBaseURL:      strings.TrimSpace(c.PostForm("base_url")),
+		model.KeyAIModel:        strings.TrimSpace(c.PostForm("model")),
+		model.KeyAIMaxTokens:    strings.TrimSpace(c.PostForm("max_tokens")),
+		model.KeyAITemperature:  strings.TrimSpace(c.PostForm("temperature")),
+		model.KeyAISystemPrompt: strings.TrimSpace(c.PostForm("system_prompt")),
+	}
+
+	// API Key 仅在非空时更新
+	apiKey := c.PostForm("api_key")
+	if apiKey != "" {
+		kvPairs[model.KeyAIApiKey] = apiKey
+	}
+
+	if err := model.BatchUpsertSettings(r.db, model.CategoryAI, kvPairs); err != nil {
+		log.Printf("[设置] 保存 AI 配置失败: %v\n", err)
+		c.Redirect(http.StatusFound, "/settings?flash_level=error&flash_msg=保存AI配置失败: "+err.Error()+"#ai")
+		return
+	}
+
+	c.Redirect(http.StatusFound, "/settings?flash_level=success&flash_msg=AI配置保存成功#ai")
+}
+
+// saveBotSettings 保存机器人配置
+func (r *Router) saveBotSettings(c *gin.Context) {
+	kvPairs := map[string]string{
+		model.KeyBotAPIURL:       strings.TrimSpace(c.PostForm("api_url")),
+		model.KeyBotAllowedUsers: strings.TrimSpace(c.PostForm("allowed_users")),
+		model.KeyBotWsHost:       strings.TrimSpace(c.PostForm("ws_host")),
+		model.KeyBotWsPort:       strings.TrimSpace(c.PostForm("ws_port")),
+	}
+
+	// access_token 仅在非空时更新
+	accessToken := c.PostForm("access_token")
+	if accessToken != "" {
+		kvPairs[model.KeyBotAccessToken] = accessToken
+	}
+
+	// checkbox 处理
+	if c.PostForm("enabled") != "" {
+		kvPairs[model.KeyBotEnabled] = "true"
+	} else {
+		kvPairs[model.KeyBotEnabled] = "false"
+	}
+	if c.PostForm("ws_enabled") != "" {
+		kvPairs[model.KeyBotWsEnabled] = "true"
+	} else {
+		kvPairs[model.KeyBotWsEnabled] = "false"
+	}
+
+	if err := model.BatchUpsertSettings(r.db, model.CategoryBot, kvPairs); err != nil {
+		log.Printf("[设置] 保存机器人配置失败: %v\n", err)
+		c.Redirect(http.StatusFound, "/settings?flash_level=error&flash_msg=保存机器人配置失败: "+err.Error()+"#bot")
+		return
+	}
+
+	// 重启机器人服务
+	if r.botSvc != nil {
+		go func() {
+			ctx := context.Background()
+			if err := r.botSvc.Reload(ctx); err != nil {
+				log.Printf("[设置] 重启机器人服务失败: %v\n", err)
+			} else {
+				log.Println("[设置] 机器人服务已根据新配置重启")
+			}
+		}()
+	}
+
+	c.Redirect(http.StatusFound, "/settings?flash_level=success&flash_msg=机器人配置保存成功#bot")
+}
+
+// testAIConnection 测试 AI 连接
+func (r *Router) testAIConnection(c *gin.Context) {
+	if r.aiSvc == nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": "AI 服务未初始化"})
+		return
+	}
+
+	info, err := r.aiSvc.TestConnection(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "AI 连接测试成功！" + info})
+}
+
+// settingsPage 设置页面（在原有基础上追加 AI 和 Bot 配置数据）
+func (r *Router) settingsPage(c *gin.Context) {
+	smtpSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategorySMTP)
+	siyuanSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategorySiyuan)
+	emailSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategoryEmail)
+	generalSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategoryGeneral)
+	scheduleSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategorySchedule)
+	outingSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategoryOuting)
+	aiSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategoryAI)
+	botSettings, _ := model.GetSettingsMapByCategory(r.db, model.CategoryBot)
+
+	// 机器人运行状态
+	botRunning := false
+	if r.botSvc != nil {
+		botRunning = r.botSvc.IsRunning()
+	}
+
+	c.HTML(http.StatusOK, "settings.html", gin.H{
+		"title":      "系统设置",
+		"active":     "settings",
+		"smtp":       smtpSettings,
+		"siyuan":     siyuanSettings,
+		"email":      emailSettings,
+		"general":    generalSettings,
+		"schedule":   scheduleSettings,
+		"outing":     outingSettings,
+		"ai":         aiSettings,
+		"bot":        botSettings,
+		"botRunning": botRunning,
+	})
 }
 
 // ==================== 中间件 ====================
