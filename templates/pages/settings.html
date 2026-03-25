@@ -274,11 +274,20 @@
 
                         <div class="row mb-3">
                             <div class="col-sm-6">
-                                <label class="form-label">主键列 ID (Key ID)</label>
+                                <label class="form-label">日期列 ID（主键）</label>
                                 <input type="text" class="form-control form-control-sm" name="key_id"
                                        value="{{if .siyuan}}{{index .siyuan "key_id"}}{{end}}"
-                                       placeholder="主键列 ID">
+                                       placeholder="日期列 Key ID">
                             </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">工作内容列 ID</label>
+                                <input type="text" class="form-control form-control-sm" name="key_content_id"
+                                       value="{{if .siyuan}}{{index .siyuan "key_content_id"}}{{end}}"
+                                       placeholder="工作内容列 Key ID">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
                             <div class="col-sm-6">
                                 <label class="form-label">笔记本 ID</label>
                                 <input type="text" class="form-control form-control-sm" name="notebook_id"

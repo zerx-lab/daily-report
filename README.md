@@ -203,8 +203,8 @@ siyuan:
   av_id: "..."                                    # 数据库（属性视图）ID
   block_id: "..."                                 # 数据库块 ID
   view_id: "..."                                  # 视图 ID
+  key_id: "..."                                   # 日期列 Key ID（主键）
   key_content_id: "..."                           # 工作内容列 Key ID
-  key_date_id: "..."                              # 日期列 Key ID
 ```
 
 ### SMTP 邮件配置

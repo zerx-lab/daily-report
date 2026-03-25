@@ -318,7 +318,7 @@ func (s *SiyuanService) AppendReportEntry(content string) error {
 		BlocksValues: [][]BlockValueEntry{
 			{
 				{
-					KeyID:      cfg.KeyID,
+					KeyID:      cfg.ContentKeyID,
 					Type:       "block",
 					IsDetached: true,
 					Block:      &BlockValue{Content: content},
@@ -347,7 +347,7 @@ func (s *SiyuanService) UpdateReportEntry(rowID, content string) error {
 
 	reqBody := SetBlockAttrRequest{
 		AVID:   cfg.AvID,
-		KeyID:  cfg.KeyID,
+		KeyID:  cfg.ContentKeyID,
 		ItemID: rowID,
 		Value: SetBlockAttrReqValue{
 			Type:  "block",
@@ -393,9 +393,9 @@ func (s *SiyuanService) DeleteReportEntries(rowIDs []string) error {
 
 // SiyuanReportRow 思源笔记中的日报行数据
 type SiyuanReportRow struct {
-	RowID     string    // 行 ID
-	Content   string    // 工作内容
-	CreatedAt time.Time // 创建时间
+	RowID      string    // 行 ID
+	Content    string    // 工作内容
+	ReportDate time.Time // 日报日期（来自 date 列或 created 列）
 }
 
 // FetchAllReports 获取数据库中的所有日报数据
@@ -443,10 +443,13 @@ func (s *SiyuanService) FetchAllReports(page, pageSize int) ([]SiyuanReportRow, 
 			switch {
 			case cell.Value.Block != nil:
 				item.Content = cell.Value.Block.Content
+			case cell.Value.Date != nil && cell.Value.Date.Content != 0:
+				// date 类型列（毫秒时间戳）
+				item.ReportDate = time.UnixMilli(cell.Value.Date.Content)
 			case cell.Value.Created != nil:
-				// 毫秒时间戳转时间
+				// created 类型列（兼容旧结构）
 				ts := cell.Value.Created.Content
-				item.CreatedAt = time.UnixMilli(ts)
+				item.ReportDate = time.UnixMilli(ts)
 			}
 		}
 		rows = append(rows, item)
@@ -466,7 +469,7 @@ func (s *SiyuanService) FetchTodayReport() (*SiyuanReportRow, error) {
 	today := time.Now().In(loc).Format("2006-01-02")
 
 	for _, row := range rows {
-		rowDate := row.CreatedAt.In(loc).Format("2006-01-02")
+		rowDate := row.ReportDate.In(loc).Format("2006-01-02")
 		if rowDate == today {
 			return &row, nil
 		}
@@ -485,7 +488,7 @@ func (s *SiyuanService) FetchReportByDate(date string) (*SiyuanReportRow, error)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 
 	for _, row := range rows {
-		rowDate := row.CreatedAt.In(loc).Format("2006-01-02")
+		rowDate := row.ReportDate.In(loc).Format("2006-01-02")
 		if rowDate == date {
 			return &row, nil
 		}
@@ -507,8 +510,8 @@ func (s *SiyuanService) SyncReportsToLocal() (int, int, error) {
 	created, updated := 0, 0
 
 	for _, row := range rows {
-		date := row.CreatedAt.In(loc).Format("2006-01-02")
-		weekday := weekdayChinese(row.CreatedAt.In(loc).Weekday())
+		date := row.ReportDate.In(loc).Format("2006-01-02")
+		weekday := weekdayChinese(row.ReportDate.In(loc).Weekday())
 
 		var report model.Report
 		result := s.db.Where("date = ?", date).First(&report)

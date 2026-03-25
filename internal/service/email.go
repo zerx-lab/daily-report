@@ -307,10 +307,10 @@ func (s *EmailService) GenerateExcelReport(report *model.Report) ([]byte, string
 		return nil, "", fmt.Errorf("写入 Excel 表头失败: %w", err)
 	}
 
-	// 将日期从 "2006-01-02" 格式转换为 "MM-DD-YY"（与样本文件一致）
+	// 将日期从 "2006-01-02" 格式转换为中文格式（如：2026年3月24日）
 	excelDate := report.Date
 	if t, err := time.Parse("2006-01-02", report.Date); err == nil {
-		excelDate = t.Format("01-02-06")
+		excelDate = t.Format("2006年1月2日")
 	}
 
 	// 写入数据行
@@ -327,6 +327,197 @@ func (s *EmailService) GenerateExcelReport(report *model.Report) ([]byte, string
 	filename := fmt.Sprintf("%s-日报-%s.xlsx", author, report.Date)
 	log.Printf("[邮件服务] 生成 Excel 附件: %s (%d bytes)\n", filename, buf.Len())
 	return buf.Bytes(), filename, nil
+}
+
+// GenerateBatchExcelReport 将多条日报内容生成一个 Excel 附件（每条日报一行）
+//
+// Excel 格式：
+//   - Sheet 名称：{作者}日报
+//   - 第 1 行：表头（日期 / 姓名 / 当日完成工作）
+//   - 第 2~N 行：各条日报数据（按日期升序）
+//
+// 返回值：(Excel字节, 文件名, 错误)
+func (s *EmailService) GenerateBatchExcelReport(reports []*model.Report) ([]byte, string, error) {
+	if len(reports) == 0 {
+		return nil, "", fmt.Errorf("日报列表为空，无法生成 Excel")
+	}
+
+	author := model.GetSettingValue(s.db, model.CategoryGeneral, model.KeyGeneralAppName, "日报")
+
+	f := excelize.NewFile()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("[邮件服务] 关闭 Excel 对象失败: %v\n", err)
+		}
+	}()
+
+	sheetName := author + "日报"
+
+	// 将默认 Sheet1 重命名
+	if err := f.SetSheetName("Sheet1", sheetName); err != nil {
+		return nil, "", fmt.Errorf("设置 Sheet 名称失败: %w", err)
+	}
+
+	// 写入表头
+	headers := []interface{}{"日期", "姓名", "当日完成工作"}
+	if err := f.SetSheetRow(sheetName, "A1", &headers); err != nil {
+		return nil, "", fmt.Errorf("写入 Excel 表头失败: %w", err)
+	}
+
+	// 写入每条日报数据（每条一行）
+	for i, report := range reports {
+		excelDate := report.Date
+		if t, err := time.Parse("2006-01-02", report.Date); err == nil {
+			excelDate = t.Format("2006年1月2日")
+		}
+
+		rowNum := i + 2 // 从第 2 行开始（第 1 行是表头）
+		cell := fmt.Sprintf("A%d", rowNum)
+		row := []interface{}{excelDate, author, report.Content}
+		if err := f.SetSheetRow(sheetName, cell, &row); err != nil {
+			return nil, "", fmt.Errorf("写入 Excel 第 %d 行失败: %w", rowNum, err)
+		}
+	}
+
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		return nil, "", fmt.Errorf("生成 Excel 字节流失败: %w", err)
+	}
+
+	// 文件名使用日期范围
+	firstDate := reports[0].Date
+	lastDate := reports[len(reports)-1].Date
+	var filename string
+	if firstDate == lastDate {
+		filename = fmt.Sprintf("%s-日报-%s.xlsx", author, firstDate)
+	} else {
+		filename = fmt.Sprintf("%s-日报-%s~%s.xlsx", author, firstDate, lastDate)
+	}
+
+	log.Printf("[邮件服务] 生成批量 Excel 附件: %s (%d 条日报, %d bytes)\n", filename, len(reports), buf.Len())
+	return buf.Bytes(), filename, nil
+}
+
+// SendBatchReports 批量发送日报邮件（将多条日报合并到一个 Excel 附件中一次性发送）
+//   - reports: 要发送的日报列表（所有非草稿日报）
+//   - sendType: 发送方式（0=手动，1=自动）
+//
+// 返回发送日志 ID 和可能的错误
+func (s *EmailService) SendBatchReports(reports []*model.Report, sendType int) (uint, error) {
+	if len(reports) == 0 {
+		return 0, fmt.Errorf("没有需要发送的日报")
+	}
+
+	// 过滤掉内容为空的日报
+	var validReports []*model.Report
+	for _, r := range reports {
+		if strings.TrimSpace(r.Content) != "" && r.Content != "待填写" {
+			validReports = append(validReports, r)
+		}
+	}
+	if len(validReports) == 0 {
+		return 0, fmt.Errorf("所有日报内容均为空，无法发送")
+	}
+
+	// 1. 加载 SMTP 配置
+	smtpCfg, err := s.GetSMTPConfig()
+	if err != nil {
+		return 0, fmt.Errorf("SMTP 配置错误: %w", err)
+	}
+
+	// 2. 获取收件人
+	toList, ccList, err := s.GetRecipients()
+	if err != nil {
+		return 0, fmt.Errorf("收件人配置错误: %w", err)
+	}
+
+	// 3. 渲染邮件主题（单条用原有模板，多条用日期范围）
+	firstDate := validReports[0].Date
+	lastDate := validReports[len(validReports)-1].Date
+	var subject string
+	if firstDate == lastDate {
+		subject, err = s.RenderSubject(validReports[0])
+		if err != nil {
+			return 0, fmt.Errorf("渲染邮件主题失败: %w", err)
+		}
+	} else {
+		appName := model.GetSettingValue(s.db, model.CategoryGeneral, model.KeyGeneralAppName, "日报助手")
+		subject = fmt.Sprintf("%s ~ %s %s工作日报", firstDate, lastDate, appName)
+	}
+
+	// 4. 生成批量 Excel 附件
+	excelData, excelFilename, err := s.GenerateBatchExcelReport(validReports)
+	if err != nil {
+		return 0, fmt.Errorf("生成 Excel 附件失败: %w", err)
+	}
+
+	// 5. 收集所有日报 ID 用于日志记录
+	reportIDs := make([]string, 0, len(validReports))
+	for _, r := range validReports {
+		reportIDs = append(reportIDs, fmt.Sprintf("%d", r.ID))
+	}
+
+	// 6. 创建发送日志记录（状态：发送中）
+	now := time.Now()
+	emailLog := &model.EmailLog{
+		ReportID:   &validReports[0].ID, // 关联第一条日报
+		Subject:    subject,
+		Recipients: strings.Join(toList, ","),
+		CcList:     strings.Join(ccList, ","),
+		Content:    fmt.Sprintf("[批量 Excel 附件] %s (共 %d 条日报, IDs: %s)", excelFilename, len(validReports), strings.Join(reportIDs, ",")),
+		Status:     model.EmailStatusSending,
+		SendType:   sendType,
+		SentAt:     &now,
+	}
+	if err := s.db.Create(emailLog).Error; err != nil {
+		return 0, fmt.Errorf("创建发送日志失败: %w", err)
+	}
+
+	// 7. 构建邮件消息（无正文，仅 Excel 附件）
+	msg := &EmailMessage{
+		To:      toList,
+		Cc:      ccList,
+		Subject: subject,
+		Body:    "",
+		Attachments: []Attachment{
+			{
+				Filename:    excelFilename,
+				ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				Data:        excelData,
+			},
+		},
+	}
+
+	// 8. 通过 SMTP 发送
+	sendErr := s.sendSMTP(smtpCfg, msg)
+
+	// 9. 更新发送日志和日报状态
+	if sendErr != nil {
+		s.db.Model(emailLog).Updates(map[string]interface{}{
+			"status":    model.EmailStatusFailed,
+			"error_msg": sendErr.Error(),
+		})
+		log.Printf("[邮件服务] 批量发送失败 (%d 条日报): %v\n", len(validReports), sendErr)
+		return emailLog.ID, fmt.Errorf("邮件发送失败: %w", sendErr)
+	}
+
+	// 发送成功，更新日志状态
+	s.db.Model(emailLog).Updates(map[string]interface{}{
+		"status":  model.EmailStatusSuccess,
+		"sent_at": now,
+	})
+
+	// 更新所有日报状态为已发送
+	sentAt := time.Now()
+	for _, r := range validReports {
+		s.db.Model(r).Updates(map[string]interface{}{
+			"status":  model.ReportStatusSent,
+			"sent_at": &sentAt,
+		})
+	}
+
+	log.Printf("[邮件服务] 批量发送成功 (%d 条日报, to=%v)\n", len(validReports), toList)
+	return emailLog.ID, nil
 }
 
 // SendReport 发送日报邮件（核心方法）

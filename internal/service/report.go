@@ -117,6 +117,19 @@ func (s *ReportService) ListRecent(limit int) ([]model.Report, error) {
 	return reports, nil
 }
 
+// GetAllNonDraftReports 获取所有非草稿状态的日报（按日期升序）
+// 用于定时发送时汇总所有日报到一个 Excel 表格中
+func (s *ReportService) GetAllNonDraftReports() ([]*model.Report, error) {
+	var reports []*model.Report
+	err := s.db.Where("status != ?", model.ReportStatusDraft).
+		Order("date DESC").
+		Find(&reports).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询非草稿日报失败: %w", err)
+	}
+	return reports, nil
+}
+
 // ==================== 创建与更新 ====================
 
 // Create 创建日报（指定日期）

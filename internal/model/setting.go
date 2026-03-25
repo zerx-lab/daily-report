@@ -50,12 +50,13 @@ const (
 
 // 思源笔记相关
 const (
-	KeySiyuanBaseURL  = "base_url"
-	KeySiyuanAPIToken = "api_token"
-	KeySiyuanAvID     = "av_id"       // 属性视图 ID
-	KeySiyuanBlockID  = "block_id"    // 数据库块 ID
-	KeySiyuanKeyID    = "key_id"      // 主键列 ID
-	KeySiyuanNotebook = "notebook_id" // 笔记本 ID
+	KeySiyuanBaseURL   = "base_url"
+	KeySiyuanAPIToken  = "api_token"
+	KeySiyuanAvID      = "av_id"          // 属性视图 ID
+	KeySiyuanBlockID   = "block_id"       // 数据库块 ID
+	KeySiyuanKeyID     = "key_id"         // 日期列 Key ID（主键）
+	KeySiyuanContentID = "key_content_id" // 工作内容列 Key ID
+	KeySiyuanNotebook  = "notebook_id"    // 笔记本 ID
 )
 
 // 定时任务相关
@@ -248,12 +249,13 @@ func GetSMTPSettings(db *gorm.DB) (*SMTPSettings, error) {
 
 // SiyuanSettings 思源笔记设置结构
 type SiyuanSettings struct {
-	BaseURL    string
-	APIToken   string
-	AvID       string
-	BlockID    string
-	KeyID      string
-	NotebookID string
+	BaseURL      string
+	APIToken     string
+	AvID         string
+	BlockID      string
+	KeyID        string // 日期列 Key ID（主键）
+	ContentKeyID string // 工作内容列 Key ID
+	NotebookID   string
 }
 
 // GetSiyuanSettings 获取思源笔记配置
@@ -263,12 +265,13 @@ func GetSiyuanSettings(db *gorm.DB) (*SiyuanSettings, error) {
 		return nil, err
 	}
 	return &SiyuanSettings{
-		BaseURL:    m[KeySiyuanBaseURL],
-		APIToken:   m[KeySiyuanAPIToken],
-		AvID:       m[KeySiyuanAvID],
-		BlockID:    m[KeySiyuanBlockID],
-		KeyID:      m[KeySiyuanKeyID],
-		NotebookID: m[KeySiyuanNotebook],
+		BaseURL:      m[KeySiyuanBaseURL],
+		APIToken:     m[KeySiyuanAPIToken],
+		AvID:         m[KeySiyuanAvID],
+		BlockID:      m[KeySiyuanBlockID],
+		KeyID:        m[KeySiyuanKeyID],
+		ContentKeyID: m[KeySiyuanContentID],
+		NotebookID:   m[KeySiyuanNotebook],
 	}, nil
 }
 
@@ -289,7 +292,8 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Category: CategorySiyuan, Key: KeySiyuanAPIToken, Value: "", Remark: "API Token"},
 		{Category: CategorySiyuan, Key: KeySiyuanAvID, Value: "20260324161653-vrznito", Remark: "属性视图 ID"},
 		{Category: CategorySiyuan, Key: KeySiyuanBlockID, Value: "20260324161646-e2zu02m", Remark: "数据库块 ID"},
-		{Category: CategorySiyuan, Key: KeySiyuanKeyID, Value: "20260324161653-rkbx4tv", Remark: "主键列 Key ID"},
+		{Category: CategorySiyuan, Key: KeySiyuanKeyID, Value: "20260324161653-iu9gqhb", Remark: "日期列 Key ID（主键）"},
+		{Category: CategorySiyuan, Key: KeySiyuanContentID, Value: "20260324161653-rkbx4tv", Remark: "工作内容列 Key ID"},
 		{Category: CategorySiyuan, Key: KeySiyuanNotebook, Value: "20260320105739-1y06ufo", Remark: "笔记本 ID"},
 
 		// 定时任务默认值

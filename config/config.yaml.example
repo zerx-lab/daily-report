@@ -23,8 +23,8 @@ siyuan:
   av_id: "your-attribute-view-id"
   block_id: "your-database-block-id"
   view_id: "your-view-id"
+  key_id: "your-date-key-id"
   key_content_id: "your-content-key-id"
-  key_date_id: "your-date-key-id"
 
 # SMTP 邮件配置
 smtp:

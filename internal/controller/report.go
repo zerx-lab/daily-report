@@ -680,7 +680,7 @@ func (c *ReportController) SaveSettings(ctx *gin.Context) {
 	// 定义每个分类的允许字段
 	allowedKeys := map[string][]string{
 		model.CategorySMTP:     {model.KeySMTPHost, model.KeySMTPPort, model.KeySMTPUsername, model.KeySMTPPassword, model.KeySMTPFrom, model.KeySMTPFromAddr, model.KeySMTPUseTLS},
-		model.CategorySiyuan:   {model.KeySiyuanBaseURL, model.KeySiyuanAPIToken, model.KeySiyuanAvID, model.KeySiyuanBlockID, model.KeySiyuanKeyID, model.KeySiyuanNotebook},
+		model.CategorySiyuan:   {model.KeySiyuanBaseURL, model.KeySiyuanAPIToken, model.KeySiyuanAvID, model.KeySiyuanBlockID, model.KeySiyuanKeyID, model.KeySiyuanContentID, model.KeySiyuanNotebook},
 		model.CategoryEmail:    {model.KeyEmailRecipients, model.KeyEmailCc, model.KeyEmailSubject},
 		model.CategoryGeneral:  {model.KeyGeneralAppName, model.KeyGeneralTimezone},
 		model.CategorySchedule: {model.KeyScheduleCreateEnabled, model.KeyScheduleCreateCron, model.KeyScheduleSendEnabled, model.KeyScheduleSendCron, model.KeyScheduleSyncEnabled, model.KeyScheduleSyncCron, model.KeyScheduleSkipHoliday},

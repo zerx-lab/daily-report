@@ -169,12 +169,13 @@ func (c *SettingController) Siyuan(ctx *gin.Context) {
 // SaveSiyuan 保存思源笔记设置
 func (c *SettingController) SaveSiyuan(ctx *gin.Context) {
 	kvPairs := map[string]string{
-		model.KeySiyuanBaseURL:  strings.TrimSpace(ctx.PostForm("base_url")),
-		model.KeySiyuanAPIToken: strings.TrimSpace(ctx.PostForm("api_token")),
-		model.KeySiyuanAvID:     strings.TrimSpace(ctx.PostForm("av_id")),
-		model.KeySiyuanBlockID:  strings.TrimSpace(ctx.PostForm("block_id")),
-		model.KeySiyuanKeyID:    strings.TrimSpace(ctx.PostForm("key_id")),
-		model.KeySiyuanNotebook: strings.TrimSpace(ctx.PostForm("notebook_id")),
+		model.KeySiyuanBaseURL:   strings.TrimSpace(ctx.PostForm("base_url")),
+		model.KeySiyuanAPIToken:  strings.TrimSpace(ctx.PostForm("api_token")),
+		model.KeySiyuanAvID:      strings.TrimSpace(ctx.PostForm("av_id")),
+		model.KeySiyuanBlockID:   strings.TrimSpace(ctx.PostForm("block_id")),
+		model.KeySiyuanKeyID:     strings.TrimSpace(ctx.PostForm("key_id")),
+		model.KeySiyuanContentID: strings.TrimSpace(ctx.PostForm("key_content_id")),
+		model.KeySiyuanNotebook:  strings.TrimSpace(ctx.PostForm("notebook_id")),
 	}
 
 	if err := model.BatchUpsertSettings(c.db, model.CategorySiyuan, kvPairs); err != nil {

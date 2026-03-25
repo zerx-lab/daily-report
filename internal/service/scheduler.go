@@ -500,39 +500,29 @@ func (s *Scheduler) jobAutoSendReport() {
 		return
 	}
 
-	// 获取今天的日报
+	// 获取所有非草稿日报（合并到一个 Excel 发送）
 	if s.reportSvc == nil {
 		taskErr = fmt.Errorf("日报服务未初始化")
 		return
 	}
 
-	report, err := s.reportSvc.GetByDate(dateStr)
+	reports, err := s.reportSvc.GetAllNonDraftReports()
 	if err != nil {
-		taskErr = fmt.Errorf("获取今日日报失败: %w", err)
+		taskErr = fmt.Errorf("获取非草稿日报失败: %w", err)
 		return
 	}
-	if report == nil {
-		taskErr = fmt.Errorf("今天(%s)没有日报记录，请先创建", dateStr)
-		return
-	}
-
-	// 检查日报内容是否为空
-	if report.Content == "" || report.Content == "待填写" {
-		taskErr = fmt.Errorf("今天的日报内容为空或未填写，跳过自动发送")
+	if len(reports) == 0 {
+		taskErr = fmt.Errorf("没有可发送的日报记录（所有日报均为草稿状态）")
 		return
 	}
 
-	// 如果已经发送过，跳过
-	if report.Status == model.ReportStatusSent {
-		log.Printf("[定时任务] 今天(%s)的日报已发送过，跳过\n", dateStr)
-		return
-	}
+	log.Printf("[定时任务] 查询到 %d 条非草稿日报，准备合并发送\n", len(reports))
 
-	// 发送邮件
+	// 批量发送邮件（所有日报合并到一个 Excel 表格中）
 	if s.emailSvc != nil {
-		_, err = s.emailSvc.SendReport(report, model.EmailSendTypeAuto)
+		_, err = s.emailSvc.SendBatchReports(reports, model.EmailSendTypeAuto)
 		if err != nil {
-			taskErr = fmt.Errorf("发送日报邮件失败: %w", err)
+			taskErr = fmt.Errorf("批量发送日报邮件失败: %w", err)
 			return
 		}
 	} else {
