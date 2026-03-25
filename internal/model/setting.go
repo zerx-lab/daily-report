@@ -119,9 +119,12 @@ const (
 	KeyBotAPIURL       = "api_url"       // NapCat OneBot HTTP API 地址
 	KeyBotAccessToken  = "access_token"  // OneBot access_token 鉴权
 	KeyBotAllowedUsers = "allowed_users" // 允许的 QQ 号白名单（逗号分隔）
-	KeyBotWsEnabled    = "ws_enabled"    // 是否启用反向 WebSocket
+	KeyBotWsEnabled    = "ws_enabled"    // 是否启用反向 WebSocket（NapCat 连到日报系统）
 	KeyBotWsHost       = "ws_host"       // 反向 WebSocket 监听地址
 	KeyBotWsPort       = "ws_port"       // 反向 WebSocket 监听端口
+	KeyBotFwsEnabled   = "fws_enabled"   // 是否启用正向 WebSocket（日报系统连到 NapCat）
+	KeyBotFwsURL       = "fws_url"       // NapCat WebSocket 服务器地址，如 ws://20.40.96.52:3001
+	KeyBotFwsToken     = "fws_token"     // 正向 WebSocket 的 access_token（可与 HTTP API 不同）
 )
 
 // ==================== 数据库操作方法 ====================
@@ -353,6 +356,9 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Category: CategoryBot, Key: KeyBotWsEnabled, Value: "false", Remark: "启用反向 WebSocket 接收消息"},
 		{Category: CategoryBot, Key: KeyBotWsHost, Value: "0.0.0.0", Remark: "反向 WebSocket 监听地址"},
 		{Category: CategoryBot, Key: KeyBotWsPort, Value: "8788", Remark: "反向 WebSocket 监听端口"},
+		{Category: CategoryBot, Key: KeyBotFwsEnabled, Value: "false", Remark: "启用正向 WebSocket（主动连接 NapCat）"},
+		{Category: CategoryBot, Key: KeyBotFwsURL, Value: "", Remark: "NapCat WebSocket 服务器地址"},
+		{Category: CategoryBot, Key: KeyBotFwsToken, Value: "", Remark: "正向 WebSocket access_token", Encrypted: true},
 
 		// 外出申请默认值
 		{Category: CategoryOuting, Key: KeyOutingRecipients, Value: "", Remark: "外出申请收件人（逗号分隔）"},

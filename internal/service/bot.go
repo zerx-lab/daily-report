@@ -82,20 +82,25 @@ type BotConfig struct {
 	APIURL       string  // NapCat OneBot HTTP API 地址（用于发送消息）
 	AccessToken  string  // access_token 鉴权
 	AllowedUsers []int64 // 允许的 QQ 号白名单
-	WsEnabled    bool    // 是否额外启用反向 WebSocket（可选）
+	WsEnabled    bool    // 是否额外启用反向 WebSocket（NapCat 连到日报系统）
 	WsHost       string  // 反向 WebSocket 监听地址
 	WsPort       int     // 反向 WebSocket 监听端口
+	FwsEnabled   bool    // 是否启用正向 WebSocket（日报系统主动连到 NapCat）
+	FwsURL       string  // NapCat WebSocket 服务器地址，如 ws://20.40.96.52:3001
+	FwsToken     string  // 正向 WebSocket 的 access_token
 }
 
 // ==================== Bot 服务 ====================
 
 // BotService QQ 机器人服务
 //
-// 消息接收支持两种通道（可同时启用）：
+// 消息接收支持三种通道（可同时启用）：
 //  1. HTTP POST 事件上报（默认）—— NapCat 将事件 POST 到日报系统的 /onebot/v11/http 端点，
 //     复用现有 Gin 路由，无需额外端口，配置最简单。
 //  2. 反向 WebSocket（可选）—— NapCat 主动连接到独立的 ws://host:port/onebot/v11/ws 端点，
 //     需要额外监听端口。适合需要更低延迟或已有 WS 配置的场景。
+//  3. 正向 WebSocket（推荐用于跨网络）—— 日报系统主动连接到 NapCat 的 WebSocket 服务器，
+//     日报系统在内网、NapCat 在公网时必须用此方式。自带断线自动重连。
 //
 // 消息发送始终通过 NapCat 的 HTTP API（/send_msg）；如有活跃的 WebSocket 连接，则优先走 WS。
 type BotService struct {
@@ -106,7 +111,8 @@ type BotService struct {
 
 	mu      sync.RWMutex
 	config  *BotConfig
-	wsConns map[*websocket.Conn]bool // 活跃的反向 WebSocket 连接
+	wsConns map[*websocket.Conn]bool // 活跃的 WebSocket 连接（反向+正向共用）
+	fwsConn *websocket.Conn          // 正向 WebSocket 连接（主动连到 NapCat）
 
 	// 控制生命周期
 	ctx      context.Context
@@ -147,6 +153,9 @@ func (s *BotService) LoadConfig() (*BotConfig, error) {
 		AccessToken: m[model.KeyBotAccessToken],
 		WsEnabled:   m[model.KeyBotWsEnabled] == "true",
 		WsHost:      m[model.KeyBotWsHost],
+		FwsEnabled:  m[model.KeyBotFwsEnabled] == "true",
+		FwsURL:      strings.TrimRight(m[model.KeyBotFwsURL], "/"),
+		FwsToken:    m[model.KeyBotFwsToken],
 	}
 
 	if cfg.APIURL == "" {
@@ -231,11 +240,20 @@ func (s *BotService) Start(parentCtx context.Context) error {
 	// HTTP POST 事件上报始终可用（通过 Gin 路由 /onebot/v11/http 注册，无需额外操作）
 	log.Println("[机器人] HTTP 事件上报: 已就绪（NapCat 配置 HTTP 上报地址为本系统的 /onebot/v11/http）")
 
+	// 正向 WebSocket（日报系统主动连到 NapCat WS 服务器）
+	if cfg.FwsEnabled && cfg.FwsURL != "" {
+		go s.startForwardWebSocket(cfg)
+	} else if cfg.FwsEnabled && cfg.FwsURL == "" {
+		log.Println("[机器人] 正向 WebSocket: 已启用但未填写 NapCat WS 服务器地址，跳过")
+	} else {
+		log.Println("[机器人] 正向 WebSocket: 未启用")
+	}
+
 	// 反向 WebSocket 作为可选的额外通道
 	if cfg.WsEnabled {
 		go s.startWebSocketServer(cfg)
 	} else {
-		log.Println("[机器人] 反向 WebSocket: 未启用（如需使用请在设置中开启）")
+		log.Println("[机器人] 反向 WebSocket: 未启用")
 	}
 
 	log.Println("[机器人] 机器人服务启动完成")
@@ -267,7 +285,13 @@ func (s *BotService) Stop() {
 		}
 	}
 
-	// 关闭所有 WebSocket 连接
+	// 关闭正向 WebSocket 连接
+	if s.fwsConn != nil {
+		_ = s.fwsConn.Close()
+		s.fwsConn = nil
+	}
+
+	// 关闭所有反向 WebSocket 连接
 	for conn := range s.wsConns {
 		_ = conn.Close()
 		delete(s.wsConns, conn)
@@ -297,6 +321,96 @@ func (s *BotService) GetConfig() *BotConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.config
+}
+
+// ==================== 正向 WebSocket 客户端（跨网络推荐） ====================
+
+// startForwardWebSocket 主动连接到 NapCat 的 WebSocket 服务器，自带断线自动重连
+func (s *BotService) startForwardWebSocket(cfg *BotConfig) {
+	log.Printf("[机器人] 正向 WebSocket: 正在连接 %s\n", cfg.FwsURL)
+
+	for {
+		// 检查是否已取消
+		s.mu.RLock()
+		ctx := s.ctx
+		s.mu.RUnlock()
+
+		if ctx == nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			log.Println("[机器人] 正向 WebSocket: 收到停止信号，退出重连循环")
+			return
+		default:
+		}
+
+		// 构建连接 header（带 token 鉴权）
+		header := http.Header{}
+		if cfg.FwsToken != "" {
+			header.Set("Authorization", "Bearer "+cfg.FwsToken)
+		}
+
+		// 拨号连接
+		conn, _, err := websocket.DefaultDialer.Dial(cfg.FwsURL, header)
+		if err != nil {
+			log.Printf("[机器人] 正向 WebSocket: 连接失败: %v，5 秒后重试...\n", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
+			continue
+		}
+
+		log.Printf("[机器人] 正向 WebSocket: 连接成功 %s\n", cfg.FwsURL)
+
+		// 注册到连接池（与反向 WS 共用）
+		s.mu.Lock()
+		s.fwsConn = conn
+		s.wsConns[conn] = true
+		s.mu.Unlock()
+
+		// 读取消息循环（阻塞直到连接断开）
+		s.fwsReadLoop(conn)
+
+		// 连接断开，从连接池移除
+		s.mu.Lock()
+		delete(s.wsConns, conn)
+		s.fwsConn = nil
+		s.mu.Unlock()
+
+		log.Println("[机器人] 正向 WebSocket: 连接已断开，5 秒后自动重连...")
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
+// fwsReadLoop 正向 WebSocket 消息读取循环
+func (s *BotService) fwsReadLoop(conn *websocket.Conn) {
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	conn.SetPongHandler(func(string) error {
+		return nil
+	})
+
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				log.Printf("[机器人] 正向 WebSocket 读取错误: %v\n", err)
+			}
+			return
+		}
+
+		// 异步处理，wsConn 传入当前连接用于回复
+		go s.handleOneBotEvent(message, conn)
+	}
 }
 
 // ==================== HTTP POST 事件上报（主通道） ====================

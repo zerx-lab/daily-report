@@ -642,8 +642,8 @@
             <!-- ── 卡片1：基础配置 ── -->
             <div class="settings-card card">
                 <div class="card-header">
-                    <h6 class="mb-1"><i class="bi bi-robot me-2"></i>QQ 机器人基础配置</h6>
-                    <small>配置 NapCat（OneBot 11 协议）QQ 机器人，对接 AI 实现智能日报管理</small>
+                    <h6 class="mb-1"><i class="bi bi-robot me-2"></i>QQ 机器人配置</h6>
+                    <small>对接 NapCat（OneBot 11 协议），通过正向 WebSocket 全双工通信，一条连接搞定收发</small>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="/settings/save-bot" id="formBot">
@@ -675,28 +675,6 @@
                             <div class="form-text">启用后机器人才会接收和处理 QQ 消息</div>
                         </div>
 
-                        <div class="row mb-3">
-                            <div class="col-sm-8">
-                                <label class="form-label">NapCat HTTP API 地址 <span class="text-muted">(发送消息用)</span></label>
-                                <input type="text" class="form-control" name="api_url"
-                                       value="{{if .bot}}{{index .bot "api_url"}}{{end}}"
-                                       placeholder="http://20.40.96.52:6099">
-                                <div class="form-text">NapCat 的 OneBot HTTP API 地址，机器人通过它向 QQ 发送回复</div>
-                            </div>
-                            <div class="col-sm-4">
-                                <label class="form-label">Access Token</label>
-                                <div class="password-wrapper">
-                                    <input type="password" class="form-control" name="access_token" id="botAccessToken"
-                                           value="{{if .bot}}{{index .bot "access_token"}}{{end}}"
-                                           placeholder="留空不鉴权">
-                                    <button type="button" class="toggle-pw" onclick="togglePassword('botAccessToken', this)">
-                                        <i class="bi bi-eye"></i>
-                                    </button>
-                                </div>
-                                <div class="form-text">与 NapCat 端配置一致</div>
-                            </div>
-                        </div>
-
                         <div class="mb-3">
                             <label class="form-label">QQ 号白名单</label>
                             <input type="text" class="form-control" name="allowed_users"
@@ -707,67 +685,72 @@
 
                         <hr class="my-3" style="border-color:var(--color-border)">
 
-                        <!-- ── 消息接收通道 ── -->
-                        <p class="mb-2 fw-semibold" style="font-size:0.9rem"><i class="bi bi-arrow-down-circle me-1"></i>消息接收通道</p>
+                        <!-- ── 正向 WebSocket（主通道，收发一体） ── -->
+                        <p class="mb-2 fw-semibold" style="font-size:0.9rem"><i class="bi bi-plug me-1"></i>正向 WebSocket 连接</p>
+                        <p class="text-muted mb-3" style="font-size:0.8rem">
+                            日报系统主动连接到 NapCat 的 WebSocket 服务器，<strong>一条连接同时完成消息接收和回复发送</strong>，自带断线自动重连。
+                        </p>
 
-                        <!-- 通道1：HTTP POST 上报（默认，始终可用） -->
-                        <div class="mb-3 p-3 rounded" style="background: var(--color-bg-secondary); border: 1px solid var(--color-border);">
-                            <div class="d-flex align-items-center mb-2">
-                                <span class="badge bg-success me-2">推荐 · 默认</span>
-                                <span class="fw-semibold" style="font-size:0.85rem"><i class="bi bi-globe me-1"></i>HTTP POST 事件上报</span>
+                        <div class="row mb-3">
+                            <div class="col-sm-8">
+                                <label class="form-label">NapCat WebSocket 服务器地址</label>
+                                <input type="text" class="form-control" name="fws_url"
+                                       value="{{if .bot}}{{index .bot "fws_url"}}{{end}}"
+                                       placeholder="ws://20.40.96.52:3001">
+                                <div class="form-text">NapCat 网络配置中「Websocket服务器」的地址和端口</div>
                             </div>
-                            <p class="text-muted mb-2" style="font-size:0.8rem">
-                                NapCat 将消息事件通过 HTTP POST 发送到本系统。<strong>复用现有 Web 端口，无需额外配置，始终可用。</strong>
-                            </p>
-                            <div class="p-2 rounded" style="background:var(--color-bg);border:1px dashed var(--color-border);">
-                                <p class="mb-1" style="font-size:0.8rem"><strong>NapCat 侧配置步骤：</strong></p>
-                                <ol class="mb-0 ps-3" style="font-size:0.78rem; color:var(--color-text-secondary)">
-                                    <li>打开 NapCat WebUI → 网络配置</li>
-                                    <li>添加 <strong>HTTP 上报</strong> 连接</li>
-                                    <li>上报地址填写：<code id="httpReportUrl">http://本机IP:{{if .bot}}{{if index .bot "ws_port"}}{{end}}{{end}}当前端口/onebot/v11/http</code>
-                                        <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="copyHttpUrl()" title="复制地址" style="font-size:0.75rem"><i class="bi bi-clipboard"></i></button>
-                                    </li>
-                                    <li>如有 Access Token，填写与上方一致的值</li>
-                                    <li>保存并启用</li>
-                                </ol>
+                            <div class="col-sm-4">
+                                <label class="form-label">WS Token</label>
+                                <div class="password-wrapper">
+                                    <input type="password" class="form-control" name="fws_token" id="botFwsToken"
+                                           value="{{if .bot}}{{index .bot "fws_token"}}{{end}}"
+                                           placeholder="与 NapCat WS 服务器一致">
+                                    <button type="button" class="toggle-pw" onclick="togglePassword('botFwsToken', this)">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">NapCat WS 服务器的 Token</div>
                             </div>
                         </div>
 
-                        <!-- 通道2：反向 WebSocket（可选） -->
-                        <div class="mb-3 p-3 rounded" style="border: 1px solid var(--color-border);">
-                            <div class="d-flex align-items-center mb-2">
-                                <span class="badge bg-secondary me-2">可选</span>
-                                <span class="fw-semibold" style="font-size:0.85rem"><i class="bi bi-broadcast me-1"></i>反向 WebSocket</span>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="fws_enabled" id="botFwsEnabled"
+                                       value="true" {{if .bot}}{{if eq (index .bot "fws_enabled") "true"}}checked{{end}}{{end}}>
+                                <label class="form-check-label" for="botFwsEnabled">
+                                    启用正向 WebSocket 连接
+                                </label>
                             </div>
-                            <p class="text-muted mb-2" style="font-size:0.8rem">
-                                NapCat 主动建立 WebSocket 长连接。需要额外监听端口，适合追求更低延迟或同时使用双通道的场景。<strong>不启用不影响机器人正常工作。</strong>
-                            </p>
+                            <div class="form-text">勾选后日报系统会主动连接到上方填写的 NapCat WS 地址</div>
+                        </div>
 
-                            <div class="row">
-                                <div class="col-sm-4">
-                                    <div class="form-check mb-2">
-                                        <input type="checkbox" class="form-check-input" name="ws_enabled" id="botWsEnabled"
-                                               value="true" {{if .bot}}{{if eq (index .bot "ws_enabled") "true"}}checked{{end}}{{end}}>
-                                        <label class="form-check-label" for="botWsEnabled">
-                                            启用反向 WebSocket
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-sm-4">
-                                    <label class="form-label">监听地址</label>
-                                    <input type="text" class="form-control form-control-sm" name="ws_host"
-                                           value="{{if .bot}}{{index .bot "ws_host"}}{{end}}"
-                                           placeholder="0.0.0.0">
-                                </div>
-                                <div class="col-sm-4">
-                                    <label class="form-label">监听端口</label>
-                                    <input type="number" class="form-control form-control-sm" name="ws_port"
-                                           value="{{if .bot}}{{index .bot "ws_port"}}{{end}}"
-                                           placeholder="8788" min="1024" max="65535">
-                                </div>
+                        <hr class="my-3" style="border-color:var(--color-border)">
+
+                        <!-- ── HTTP API（降级通道，仅发送用） ── -->
+                        <p class="mb-2 fw-semibold" style="font-size:0.9rem"><i class="bi bi-arrow-right-circle me-1"></i>HTTP API <span class="badge bg-secondary" style="font-size:0.65rem">降级备选</span></p>
+                        <p class="text-muted mb-3" style="font-size:0.8rem">
+                            当正向 WebSocket 断线时，自动通过 HTTP API 发送消息。通常不需要修改。
+                        </p>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-8">
+                                <label class="form-label">NapCat HTTP API 地址</label>
+                                <input type="text" class="form-control" name="api_url"
+                                       value="{{if .bot}}{{index .bot "api_url"}}{{end}}"
+                                       placeholder="http://20.40.96.52:3000">
+                                <div class="form-text">NapCat 网络配置中「HTTP服务器」的地址和端口</div>
                             </div>
-                            <div class="form-text mt-1">
-                                NapCat 侧配置反向 WS 地址为：<code>ws://本机IP:<span class="ws-port-display">{{if .bot}}{{index .bot "ws_port"}}{{end}}</span>/onebot/v11/ws</code>
+                            <div class="col-sm-4">
+                                <label class="form-label">HTTP Token</label>
+                                <div class="password-wrapper">
+                                    <input type="password" class="form-control" name="access_token" id="botAccessToken"
+                                           value="{{if .bot}}{{index .bot "access_token"}}{{end}}"
+                                           placeholder="与 NapCat HTTP 服务器一致">
+                                    <button type="button" class="toggle-pw" onclick="togglePassword('botAccessToken', this)">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">NapCat HTTP 服务器的 Token</div>
                             </div>
                         </div>
 
@@ -783,38 +766,42 @@
                 </div>
             </div>
 
-            <!-- ── 卡片2：NapCat 快速配置指引 ── -->
+            <!-- ── 卡片2：NapCat 配置指引 ── -->
             <div class="settings-card card mt-3">
                 <div class="card-header">
-                    <h6 class="mb-1"><i class="bi bi-signpost-split me-2"></i>NapCat 快速配置指引</h6>
-                    <small>最少步骤让机器人跑起来</small>
+                    <h6 class="mb-1"><i class="bi bi-signpost-split me-2"></i>NapCat 配置指引</h6>
+                    <small>只需在 NapCat WebUI 新建两个网络配置</small>
                 </div>
                 <div class="card-body" style="font-size:0.83rem">
                     <div class="row">
                         <div class="col-md-6">
-                            <p class="fw-semibold mb-2"><i class="bi bi-1-circle me-1 text-primary"></i>本系统侧（当前页面）</p>
-                            <ol class="ps-3 mb-3" style="line-height:1.9">
-                                <li>勾选 <strong>启用 QQ 机器人</strong></li>
-                                <li>填写 <strong>NapCat HTTP API 地址</strong>（NapCat 运行地址）</li>
-                                <li>填写 <strong>QQ 号白名单</strong>（你的 QQ 号）</li>
-                                <li>保存并重启服务</li>
+                            <p class="fw-semibold mb-2"><i class="bi bi-1-circle me-1 text-primary"></i>NapCat 新建「WebSocket 服务器」</p>
+                            <p class="text-muted mb-1" style="font-size:0.78rem">用于日报系统主动连入，<strong>收发消息的主通道</strong></p>
+                            <ol class="ps-3 mb-3" style="line-height:1.8; font-size:0.8rem">
+                                <li>NapCat WebUI → 网络配置 → 新建</li>
+                                <li>选择 <strong>Websocket服务器</strong></li>
+                                <li>Host 填 <code>0.0.0.0</code>，Port 如 <code>3001</code></li>
+                                <li>启用并保存，记下 Token</li>
+                                <li>本页填入 <code>ws://NapCat地址:3001</code> 和 Token</li>
                             </ol>
                         </div>
                         <div class="col-md-6">
-                            <p class="fw-semibold mb-2"><i class="bi bi-2-circle me-1 text-primary"></i>NapCat 侧（NapCat WebUI）</p>
-                            <ol class="ps-3 mb-3" style="line-height:1.9">
-                                <li>启用 <strong>HTTP 上报</strong></li>
-                                <li>上报地址填本系统的 <code>/onebot/v11/http</code></li>
-                                <li>启用 <strong>HTTP 服务</strong>（机器人回消息用）</li>
-                                <li>保存，向机器人发消息测试</li>
+                            <p class="fw-semibold mb-2"><i class="bi bi-2-circle me-1 text-primary"></i>NapCat 新建「HTTP 服务器」</p>
+                            <p class="text-muted mb-1" style="font-size:0.78rem">WS 断线时降级发消息用，<strong>可选但建议配上</strong></p>
+                            <ol class="ps-3 mb-3" style="line-height:1.8; font-size:0.8rem">
+                                <li>NapCat WebUI → 网络配置 → 新建</li>
+                                <li>选择 <strong>HTTP服务器</strong></li>
+                                <li>Host 填 <code>0.0.0.0</code>，Port 如 <code>3000</code></li>
+                                <li>启用并保存，记下 Token</li>
+                                <li>本页填入 <code>http://NapCat地址:3000</code> 和 Token</li>
                             </ol>
                         </div>
                     </div>
                     <div class="alert alert-info py-2 px-3 mb-0 d-flex align-items-start" style="font-size:0.8rem" role="alert">
                         <i class="bi bi-lightbulb me-2 mt-1"></i>
                         <div>
-                            <strong>只需 HTTP 上报即可工作</strong>，反向 WebSocket 是可选的。两者可同时启用互为备份。
-                            消息发送始终通过 NapCat 的 HTTP API 地址。
+                            <strong>正向 WebSocket 一条连接搞定收发</strong>，日报系统主动连到 NapCat，无需 NapCat 能访问你的内网。
+                            断线时自动重连，HTTP API 自动降级兜底。
                         </div>
                     </div>
                 </div>
@@ -1138,34 +1125,7 @@
         });
     };
 
-    // ========== 复制 HTTP 上报地址 ==========
-    window.copyHttpUrl = function() {
-        var url = window.location.protocol + '//' + window.location.host + '/onebot/v11/http';
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).then(function() {
-                showAlert('已复制上报地址: ' + url, 'success');
-            });
-        } else {
-            prompt('请手动复制以下地址：', url);
-        }
-    };
 
-    // 页面加载时自动填充 HTTP 上报 URL 显示
-    (function() {
-        var el = document.getElementById('httpReportUrl');
-        if (el) {
-            el.textContent = window.location.protocol + '//' + window.location.host + '/onebot/v11/http';
-        }
-        // 同步 WS 端口到显示
-        var wsPortInput = document.querySelector('input[name="ws_port"]');
-        var wsPortDisplay = document.querySelector('.ws-port-display');
-        if (wsPortInput && wsPortDisplay) {
-            wsPortDisplay.textContent = wsPortInput.value || '8788';
-            wsPortInput.addEventListener('input', function() {
-                wsPortDisplay.textContent = this.value || '8788';
-            });
-        }
-    })();
 
     // ========== 重启机器人 ==========
     window.reloadBot = function() {

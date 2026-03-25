@@ -671,8 +671,7 @@ func (r *Router) saveBotSettings(c *gin.Context) {
 	kvPairs := map[string]string{
 		model.KeyBotAPIURL:       strings.TrimSpace(c.PostForm("api_url")),
 		model.KeyBotAllowedUsers: strings.TrimSpace(c.PostForm("allowed_users")),
-		model.KeyBotWsHost:       strings.TrimSpace(c.PostForm("ws_host")),
-		model.KeyBotWsPort:       strings.TrimSpace(c.PostForm("ws_port")),
+		model.KeyBotFwsURL:       strings.TrimSpace(c.PostForm("fws_url")),
 	}
 
 	// access_token 仅在非空时更新
@@ -681,16 +680,22 @@ func (r *Router) saveBotSettings(c *gin.Context) {
 		kvPairs[model.KeyBotAccessToken] = accessToken
 	}
 
+	// fws_token 仅在非空时更新
+	fwsToken := c.PostForm("fws_token")
+	if fwsToken != "" {
+		kvPairs[model.KeyBotFwsToken] = fwsToken
+	}
+
 	// checkbox 处理
 	if c.PostForm("enabled") != "" {
 		kvPairs[model.KeyBotEnabled] = "true"
 	} else {
 		kvPairs[model.KeyBotEnabled] = "false"
 	}
-	if c.PostForm("ws_enabled") != "" {
-		kvPairs[model.KeyBotWsEnabled] = "true"
+	if c.PostForm("fws_enabled") != "" {
+		kvPairs[model.KeyBotFwsEnabled] = "true"
 	} else {
-		kvPairs[model.KeyBotWsEnabled] = "false"
+		kvPairs[model.KeyBotFwsEnabled] = "false"
 	}
 
 	if err := model.BatchUpsertSettings(r.db, model.CategoryBot, kvPairs); err != nil {
