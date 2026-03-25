@@ -71,6 +71,13 @@ func InitDB(dbPath string) error {
 
 // autoMigrate 自动迁移所有模型的表结构
 func autoMigrate() error {
+	// 删除 reports 表旧的 date 单列唯一索引，改用 (date, deleted_at) 组合唯一索引以兼容软删除
+	if DB.Migrator().HasIndex(&Report{}, "idx_reports_date") {
+		if err := DB.Migrator().DropIndex(&Report{}, "idx_reports_date"); err != nil {
+			log.Printf("[数据库] 删除旧索引 idx_reports_date 失败(可忽略): %v\n", err)
+		}
+	}
+
 	return DB.AutoMigrate(
 		&Report{},
 		&SendLog{},

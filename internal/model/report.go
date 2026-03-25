@@ -35,16 +35,16 @@ func (s ReportStatus) String() string {
 // Report 日报模型
 type Report struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
-	Date      string         `gorm:"type:varchar(10);uniqueIndex;not null" json:"date"` // 格式: 2026-03-24
-	Weekday   string         `gorm:"type:varchar(10);not null" json:"weekday"`          // 星期几
-	Content   string         `gorm:"type:text" json:"content"`                          // 日报正文内容
-	Status    ReportStatus   `gorm:"type:integer;default:0;index" json:"status"`        // 日报状态
-	SiyuanID  string         `gorm:"type:varchar(64);index" json:"siyuan_id"`           // 思源笔记中的行 ID
-	SyncedAt  *time.Time     `json:"synced_at"`                                         // 最后同步思源的时间
-	SentAt    *time.Time     `json:"sent_at"`                                           // 最后发送邮件的时间
+	Date      string         `gorm:"type:varchar(10);not null;uniqueIndex:idx_reports_date_deleted" json:"date"` // 格式: 2026-03-24
+	Weekday   string         `gorm:"type:varchar(10);not null" json:"weekday"`                                   // 星期几
+	Content   string         `gorm:"type:text" json:"content"`                                                   // 日报正文内容
+	Status    ReportStatus   `gorm:"type:integer;default:0;index" json:"status"`                                 // 日报状态
+	SiyuanID  string         `gorm:"type:varchar(64);index" json:"siyuan_id"`                                    // 思源笔记中的行 ID
+	SyncedAt  *time.Time     `json:"synced_at"`                                                                  // 最后同步思源的时间
+	SentAt    *time.Time     `json:"sent_at"`                                                                    // 最后发送邮件的时间
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:idx_reports_date_deleted" json:"-"`
 }
 
 // TableName 指定表名

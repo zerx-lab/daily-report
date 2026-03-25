@@ -29,6 +29,7 @@
                                 <thead>
                                     <tr>
                                         <th style="width: 48px">#</th>
+                                        <th style="width: 80px">类型</th>
                                         <th style="width: 155px">发送时间</th>
                                         <th>邮件主题</th>
                                         <th style="width: 180px">收件人</th>
@@ -49,6 +50,9 @@
                                         <td class="text-muted">
                                             {{rowIndex $.pagination.Page
                                             $.pagination.PageSize $i}}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{$log.LogTypeBadgeClass}}">{{$log.LogTypeText}}</span>
                                         </td>
                                         <td class="small text-nowrap">
                                             {{formatDateTimePtr $log.SentAt}}
@@ -253,10 +257,18 @@
 
                         var html = "";
                         html += '<div class="row g-3 mb-3">';
+                        var logTypeMap = { 0: "日报", 1: "外出申请" };
+                        var logTypeBadgeMap = { 0: "primary", 1: "warning" };
                         html +=
-                            '<div class="col-sm-6"><label class="form-label text-muted" style="font-size:0.78rem">邮件主题</label><p class="mb-0 fw-medium" style="font-size:0.9rem">' +
+                            '<div class="col-sm-4"><label class="form-label text-muted" style="font-size:0.78rem">邮件主题</label><p class="mb-0 fw-medium" style="font-size:0.9rem">' +
                             escapeHtml(d.subject || "-") +
                             "</p></div>";
+                        html +=
+                            '<div class="col-sm-2"><label class="form-label text-muted" style="font-size:0.78rem">类型</label><p class="mb-0"><span class="badge bg-' +
+                            (logTypeBadgeMap[d.log_type] || "secondary") +
+                            '">' +
+                            (logTypeMap[d.log_type] || "未知") +
+                            "</span></p></div>";
                         html +=
                             '<div class="col-sm-3"><label class="form-label text-muted" style="font-size:0.78rem">状态</label><p class="mb-0"><span class="badge bg-' +
                             (badgeMap[d.status] || "secondary") +

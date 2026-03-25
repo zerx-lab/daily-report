@@ -305,7 +305,8 @@ func (c *OutingController) Send(ctx *gin.Context) {
 	// 5. 创建邮件日志
 	now := time.Now()
 	emailLog := &model.EmailLog{
-		ReportID:   0, // 外出申请不关联日报
+		LogType:    model.LogTypeOuting,
+		OutingID:   &outing.ID,
 		Subject:    subject,
 		Recipients: strings.Join(toList, ","),
 		CcList:     strings.Join(ccList, ","),
@@ -385,7 +386,7 @@ func renderOutingSubject(tmpl string, outing *model.OutingRequest) string {
 	return buf.String()
 }
 
-// renderOutingEmailBody 生成外出申请 HTML 邮件正文（内联样式，兼容邮件客户端）
+// renderOutingEmailBody 生成外出申请 HTML 邮件正文（朴素楷体表格，与历史邮件风格一致）
 func renderOutingEmailBody(outing *model.OutingRequest) string {
 	// 转义用户输入，防止 XSS
 	applicant := html.EscapeString(outing.Applicant)
@@ -396,80 +397,47 @@ func renderOutingEmailBody(outing *model.OutingRequest) string {
 	reason := html.EscapeString(outing.Reason)
 	remarks := html.EscapeString(outing.Remarks)
 
-	// 橙色高亮色
-	const accentColor = "#E88B00"
-	// 表头背景色
-	const headerBg = "#FFF8EE"
-	// 边框色
-	const borderColor = "#D9D9D9"
+	// 单元格通用样式
+	const cellFont = "font-size: 16px; font-family: 楷体;"
+	// 标签列样式（左侧列）
+	const labelCell = "border-right: 1px solid windowtext; border-bottom: 1px solid windowtext; border-left: 1px solid windowtext; border-top: none; padding: 0px 7px;"
+	// 值列样式（右侧列，无左边框）
+	const valueCell = "border-top: none; border-left: none; border-bottom: 1px solid windowtext; border-right: 1px solid windowtext; padding: 0px 7px;"
+	// 段落样式
+	const pStyle = "margin: 0px; text-align: justify; font-size: 14px; font-family: Calibri, sans-serif;"
 
 	var buf bytes.Buffer
 
-	// 邮件外层容器
-	buf.WriteString(`<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0; padding:0; background-color:#F5F5F5; font-family:'Microsoft YaHei','PingFang SC','Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F5F5;">
-<tr><td align="center" style="padding:30px 20px;">
-
-<!-- 邮件内容卡片 -->
-<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-
-<!-- 标题区域 -->
+	buf.WriteString(`<table border="1" cellpadding="0" cellspacing="0" style="font-family: 'Microsoft YaHei UI'; font-size: 14px; color: rgb(0, 0, 0); width: 631px; border-collapse: collapse; border: none;">
+<tbody>
+<!-- 第1行：标题 -->
 <tr>
-<td style="padding:28px 32px 20px 32px; text-align:center; border-bottom:2px solid `)
-	buf.WriteString(accentColor)
-	buf.WriteString(`;">
-<h2 style="margin:0; font-size:22px; font-weight:normal; color:#333333;">
-<span style="font-weight:bold; color:`)
-	buf.WriteString(accentColor)
-	buf.WriteString(`;">外出</span>申请表
-</h2>
+<td colspan="4" valign="top" width="631" style="border: 1px solid windowtext; padding: 0px 7px;">
+<p style="` + pStyle + `"><span style="` + cellFont + `">外出申请表</span></p>
 </td>
 </tr>
-
-<!-- 表格内容区域 -->
+<!-- 第2行：申请人 / 部门 -->
 <tr>
-<td style="padding:24px 32px 32px 32px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid `)
-	buf.WriteString(borderColor)
-	buf.WriteString(`;">
-
-<!-- 第1行：申请人 / 部门 -->
-<tr>
-<td style="width:25%; padding:12px 16px; border:1px solid `)
-	buf.WriteString(borderColor)
-	buf.WriteString(`; background-color:`)
-	buf.WriteString(headerBg)
-	buf.WriteString(`; color:`)
-	buf.WriteString(accentColor)
-	buf.WriteString(`; font-size:14px; font-weight:bold; text-align:center; white-space:nowrap;">申请人</td>
-<td style="width:25%; padding:12px 16px; border:1px solid `)
-	buf.WriteString(borderColor)
-	buf.WriteString(`; font-size:14px; color:#333333; text-align:center;">`)
+<td height="23" valign="top" width="130" style="` + labelCell + `">
+<p style="` + pStyle + `"><span style="` + cellFont + `">申请人</span></p>
+</td>
+<td height="23" valign="top" width="227" style="` + valueCell + `">
+<p style="` + pStyle + `"><span style="` + cellFont + `">&nbsp;`)
 	buf.WriteString(applicant)
-	buf.WriteString(`</td>
-<td style="width:25%; padding:12px 16px; border:1px solid `)
-	buf.WriteString(borderColor)
-	buf.WriteString(`; background-color:`)
-	buf.WriteString(headerBg)
-	buf.WriteString(`; color:`)
-	buf.WriteString(accentColor)
-	buf.WriteString(`; font-size:14px; font-weight:bold; text-align:center; white-space:nowrap;">部门</td>
-<td style="width:25%; padding:12px 16px; border:1px solid `)
-	buf.WriteString(borderColor)
-	buf.WriteString(`; font-size:14px; color:#333333; text-align:center;">`)
+	buf.WriteString(`</span></p>
+</td>
+<td height="23" valign="top" width="66" style="` + valueCell + `">
+<p style="` + pStyle + `"><span style="` + cellFont + `">部门</span></p>
+</td>
+<td height="23" valign="top" width="208" style="` + valueCell + `">
+<p style="` + pStyle + `"><span style="` + cellFont + `">&nbsp;`)
 	buf.WriteString(department)
-	buf.WriteString(`</td>
+	buf.WriteString(`</span></p>
+</td>
 </tr>
-
 `)
 
-	// 后续行使用辅助函数统一生成（标签列 + 值列跨3列）
+	// 后续行：标签列（width=130） + 值列（colspan=3, width=501）
 	rows := []struct {
 		label string
 		value string
@@ -482,48 +450,25 @@ func renderOutingEmailBody(outing *model.OutingRequest) string {
 	}
 
 	for _, row := range rows {
-		buf.WriteString(`<tr>
-<td style="width:25%; padding:12px 16px; border:1px solid `)
-		buf.WriteString(borderColor)
-		buf.WriteString(`; background-color:`)
-		buf.WriteString(headerBg)
-		buf.WriteString(`; color:`)
-		buf.WriteString(accentColor)
-		buf.WriteString(`; font-size:14px; font-weight:bold; text-align:center; white-space:nowrap;">`)
-		buf.WriteString(row.label)
-		buf.WriteString(`</td>
-<td colspan="3" style="padding:12px 16px; border:1px solid `)
-		buf.WriteString(borderColor)
-		buf.WriteString(`; font-size:14px; color:#333333; line-height:1.6;">`)
 		// 事由和备注可能含有换行，将换行转为 <br>
 		val := strings.ReplaceAll(row.value, "\n", "<br>")
+		buf.WriteString(`<tr>
+<td valign="top" width="130" style="` + labelCell + `">
+<p style="` + pStyle + `"><span style="` + cellFont + `">`)
+		buf.WriteString(row.label)
+		buf.WriteString(`</span></p>
+</td>
+<td colspan="3" valign="top" width="501" style="` + valueCell + `">
+<p style="margin: 0px; text-align: justify;">`)
 		buf.WriteString(val)
-		buf.WriteString(`</td>
+		buf.WriteString(`</p>
+</td>
 </tr>
 `)
 	}
 
-	// 关闭表格和容器
-	buf.WriteString(`
-</table>
-</td>
-</tr>
-
-<!-- 底部提示 -->
-<tr>
-<td style="padding:0 32px 24px 32px;">
-<p style="margin:0; font-size:12px; color:#999999; text-align:center; line-height:1.6;">
-</p>
-</td>
-</tr>
-
-</table>
-<!-- /邮件内容卡片 -->
-
-</td></tr>
-</table>
-</body>
-</html>`)
+	buf.WriteString(`</tbody>
+</table>`)
 
 	return buf.String()
 }

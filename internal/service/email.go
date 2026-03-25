@@ -369,7 +369,7 @@ func (s *EmailService) SendReport(report *model.Report, sendType int) (uint, err
 	// 5. 创建发送日志记录（状态：发送中）
 	now := time.Now()
 	emailLog := &model.EmailLog{
-		ReportID:   report.ID,
+		ReportID:   &report.ID,
 		Subject:    subject,
 		Recipients: strings.Join(toList, ","),
 		CcList:     strings.Join(ccList, ","),
