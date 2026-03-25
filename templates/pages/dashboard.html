@@ -1,0 +1,512 @@
+{{define "dashboard.html"}}
+<!doctype html>
+<html lang="zh-CN">
+    {{template "head" .}}
+    <body>
+        {{template "navbar" .}} {{template "flash" .}}
+
+        <div class="main-content">
+            <div class="container">
+                <!-- 今日信息栏 -->
+                <div
+                    class="card mb-4"
+                    style="border-left: 4px solid var(--color-primary)"
+                >
+                    <div
+                        class="card-body py-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
+                    >
+                        <div class="d-flex align-items-center gap-3">
+                            <div>
+                                <h5 class="mb-0 fw-bold">
+                                    <i
+                                        class="bi bi-calendar3 me-2"
+                                        style="color: var(--color-primary)"
+                                    ></i
+                                    >{{.today}} {{.weekday}}
+                                </h5>
+                            </div>
+                            {{if .isWorkday}}
+                            <span class="badge bg-success"
+                                ><i class="bi bi-briefcase-fill me-1"></i
+                                >工作日</span
+                            >
+                            {{else}}
+                            <span class="badge bg-secondary"
+                                ><i class="bi bi-cup-hot-fill me-1"></i
+                                >休息日</span
+                            >
+                            {{end}}
+                        </div>
+                        <div class="text-muted" style="font-size: 0.85rem">
+                            <i class="bi bi-clock me-1"></i
+                            ><span id="liveClock">{{.currentTime}}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-lg-3">
+                        <div class="card stat-card stat-primary h-100">
+                            <div class="card-body d-flex align-items-center">
+                                <div
+                                    class="stat-icon bg-primary bg-opacity-10 me-3"
+                                    style="color: var(--color-primary)"
+                                >
+                                    <i class="bi bi-journal-richtext"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">日报总数</div>
+                                    <div class="stat-number">
+                                        {{.stats.TotalReports}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card stat-card stat-warning h-100">
+                            <div class="card-body d-flex align-items-center">
+                                <div
+                                    class="stat-icon me-3"
+                                    style="
+                                        background-color: rgba(
+                                            255,
+                                            209,
+                                            102,
+                                            0.12
+                                        );
+                                        color: #92700c;
+                                    "
+                                >
+                                    <i class="bi bi-pencil-square"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">草稿</div>
+                                    <div class="stat-number">
+                                        {{.stats.DraftCount}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card stat-card stat-primary h-100">
+                            <div class="card-body d-flex align-items-center">
+                                <div
+                                    class="stat-icon bg-primary bg-opacity-10 me-3"
+                                    style="color: var(--color-primary)"
+                                >
+                                    <i class="bi bi-send"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">待发送</div>
+                                    <div class="stat-number">
+                                        {{.stats.ReadyCount}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3">
+                        <div class="card stat-card stat-success h-100">
+                            <div class="card-body d-flex align-items-center">
+                                <div
+                                    class="stat-icon me-3"
+                                    style="
+                                        background-color: rgba(
+                                            6,
+                                            214,
+                                            160,
+                                            0.12
+                                        );
+                                        color: #059669;
+                                    "
+                                >
+                                    <i class="bi bi-check-circle"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">已发送</div>
+                                    <div class="stat-number">
+                                        {{.stats.SentCount}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 今日日报 -->
+                <div class="card mb-4">
+                    <div
+                        class="card-header d-flex align-items-center justify-content-between"
+                    >
+                        <h6 class="mb-0 fw-bold">
+                            <i
+                                class="bi bi-star me-2"
+                                style="color: var(--color-warning)"
+                            ></i
+                            >今日日报
+                        </h6>
+                        {{if .stats.TodayExists}}
+                        <span
+                            class="badge bg-{{statusBadge .stats.TodayReport.Status}}"
+                            >{{statusText .stats.TodayReport.Status}}</span
+                        >
+                        {{end}}
+                    </div>
+                    <div class="card-body">
+                        {{if .stats.TodayExists}}
+                        <div
+                            class="d-flex align-items-start justify-content-between flex-wrap gap-3"
+                        >
+                            <div class="flex-grow-1" style="min-width: 0">
+                                {{if .stats.TodayReport.Content}}
+                                <div
+                                    style="
+                                        white-space: pre-wrap;
+                                        word-break: break-word;
+                                        color: var(--color-text);
+                                        font-size: 0.9rem;
+                                        line-height: 1.7;
+                                    "
+                                >
+                                    {{truncate .stats.TodayReport.Content 400}}
+                                </div>
+                                {{else}}
+                                <p class="text-muted mb-0 fst-italic">
+                                    暂无内容，点击编辑填写日报
+                                </p>
+                                {{end}}
+                            </div>
+                            <div class="d-flex gap-2 flex-shrink-0">
+                                <a
+                                    href="/reports/{{.stats.TodayReport.ID}}/edit"
+                                    class="btn btn-primary btn-sm"
+                                >
+                                    <i class="bi bi-pencil me-1"></i>编辑
+                                </a>
+                                <form
+                                    method="POST"
+                                    action="/reports/{{.stats.TodayReport.ID}}/send"
+                                    class="d-inline"
+                                    onsubmit="
+                                        return confirm(
+                                            '确认发送今日日报邮件？',
+                                        );
+                                    "
+                                >
+                                    <button
+                                        type="submit"
+                                        class="btn btn-success btn-sm"
+                                    >
+                                        <i class="bi bi-send me-1"></i>发送
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {{else}}
+                        <div class="empty-state py-5">
+                            <span
+                                class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                                style="
+                                    width: 72px;
+                                    height: 72px;
+                                    background-color: rgba(67, 97, 238, 0.1);
+                                    color: var(--color-accent);
+                                "
+                            >
+                                <i
+                                    class="bi bi-journal-plus"
+                                    style="font-size: 2rem"
+                                ></i>
+                            </span>
+                            <p class="mb-1 fw-semibold text-dark">
+                                今日尚未创建日报
+                            </p>
+                            <p
+                                class="mb-3 text-muted"
+                                style="font-size: 0.875rem"
+                            >
+                                点击下方按钮，立即开始记录今天的工作
+                            </p>
+                            <form
+                                method="POST"
+                                action="/reports/create-today"
+                                class="d-inline"
+                            >
+                                <button
+                                    type="submit"
+                                    class="btn btn-accent btn-lg px-4 py-2 shadow-sm"
+                                >
+                                    <i class="bi bi-plus-lg me-2"></i
+                                    >快速创建今日日报
+                                </button>
+                            </form>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+
+                <!-- 最近日报 & 最近发送记录 -->
+                <div class="row g-4 mb-4">
+                    <!-- 最近日报 -->
+                    <div class="col-lg-7">
+                        <div class="card h-100">
+                            <div
+                                class="card-header d-flex align-items-center justify-content-between"
+                            >
+                                <h6 class="mb-0 fw-bold">
+                                    <i
+                                        class="bi bi-clock-history me-2"
+                                        style="color: var(--color-primary)"
+                                    ></i
+                                    >最近日报
+                                </h6>
+                                <a
+                                    href="/reports"
+                                    class="btn btn-outline-primary btn-sm"
+                                    >查看全部</a
+                                >
+                            </div>
+                            <div class="card-body p-0">
+                                {{if .stats.RecentReports}}
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>日期</th>
+                                                <th>星期</th>
+                                                <th>内容预览</th>
+                                                <th>状态</th>
+                                                <th class="text-end">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {{range .stats.RecentReports}}
+                                            <tr>
+                                                <td class="fw-medium">
+                                                    {{.Date}}
+                                                </td>
+                                                <td>{{.Weekday}}</td>
+                                                <td
+                                                    class="content-preview"
+                                                    title="{{.Content}}"
+                                                >
+                                                    {{truncate .Content 40}}
+                                                </td>
+                                                <td>
+                                                    <span
+                                                        class="badge bg-{{statusBadge .Status}}"
+                                                        >{{statusText
+                                                        .Status}}</span
+                                                    >
+                                                </td>
+                                                <td class="text-end">
+                                                    <a
+                                                        href="/reports/{{.ID}}/edit"
+                                                        class="btn btn-outline-primary btn-action"
+                                                        title="编辑"
+                                                    >
+                                                        <i
+                                                            class="bi bi-pencil"
+                                                        ></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            {{end}}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {{else}}
+                                <div class="empty-state">
+                                    <i class="bi bi-inbox"></i>
+                                    <p class="mb-0">暂无日报记录</p>
+                                </div>
+                                {{end}}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 最近发送记录 -->
+                    <div class="col-lg-5">
+                        <div class="card h-100">
+                            <div
+                                class="card-header d-flex align-items-center justify-content-between"
+                            >
+                                <h6 class="mb-0 fw-bold">
+                                    <i
+                                        class="bi bi-envelope-check me-2"
+                                        style="color: #059669"
+                                    ></i
+                                    >最近发送
+                                </h6>
+                                <a
+                                    href="/logs"
+                                    class="btn btn-outline-success btn-sm"
+                                    >查看全部</a
+                                >
+                            </div>
+                            <div class="card-body p-0">
+                                {{if .recentLogs}}
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>时间</th>
+                                                <th>主题</th>
+                                                <th>状态</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {{range .recentLogs}}
+                                            <tr>
+                                                <td class="small text-nowrap">
+                                                    {{formatDateTimePtr
+                                                    .SentAt}}
+                                                </td>
+                                                <td title="{{.Subject}}">
+                                                    {{truncate .Subject 24}}
+                                                </td>
+                                                <td>
+                                                    <span
+                                                        class="badge bg-{{emailStatusBadge .Status}}"
+                                                        >{{emailStatusText
+                                                        .Status}}</span
+                                                    >
+                                                </td>
+                                            </tr>
+                                            {{end}}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {{else}}
+                                <div class="empty-state">
+                                    <i class="bi bi-envelope"></i>
+                                    <p class="mb-0">暂无发送记录</p>
+                                </div>
+                                {{end}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 定时任务概览 -->
+                {{if .jobsStatus}}
+                <div class="card">
+                    <div
+                        class="card-header d-flex align-items-center justify-content-between"
+                    >
+                        <h6 class="mb-0 fw-bold">
+                            <i
+                                class="bi bi-clock-history me-2"
+                                style="color: var(--color-text-muted)"
+                            ></i
+                            >定时任务
+                        </h6>
+                        <a
+                            href="/schedule"
+                            class="btn btn-outline-secondary btn-sm"
+                            >管理任务</a
+                        >
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>任务名称</th>
+                                        <th>Cron</th>
+                                        <th>状态</th>
+                                        <th>上次运行</th>
+                                        <th>下次运行</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{range .jobsStatus}}
+                                    <tr>
+                                        <td>
+                                            <span class="fw-medium"
+                                                >{{index . "task_name"}}</span
+                                            >
+                                            {{if index . "description"}}
+                                            <br /><small class="text-muted"
+                                                >{{index .
+                                                "description"}}</small
+                                            >
+                                            {{end}}
+                                        </td>
+                                        <td>
+                                            <code
+                                                style="
+                                                    font-size: 0.8rem;
+                                                    background: #f0f2f5;
+                                                    padding: 2px 6px;
+                                                    border-radius: 4px;
+                                                "
+                                                >{{index . "cron_expr"}}</code
+                                            >
+                                        </td>
+                                        <td>
+                                            {{if index . "enabled"}}
+                                            <span class="badge bg-success"
+                                                >已启用</span
+                                            >
+                                            {{else}}
+                                            <span class="badge bg-secondary"
+                                                >已停用</span
+                                            >
+                                            {{end}}
+                                        </td>
+                                        <td class="small text-muted">
+                                            {{if index . "last_run_at"}}{{index
+                                            . "last_run_at"}}{{else}}-{{end}}
+                                        </td>
+                                        <td class="small text-muted">
+                                            {{if index . "next_run_at"}}{{index
+                                            . "next_run_at"}}{{else}}-{{end}}
+                                        </td>
+                                    </tr>
+                                    {{end}}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        {{template "footer" .}} {{template "scripts" .}}
+        <script>
+            (function () {
+                function updateClock() {
+                    var now = new Date();
+                    var y = now.getFullYear();
+                    var mo = String(now.getMonth() + 1).padStart(2, "0");
+                    var d = String(now.getDate()).padStart(2, "0");
+                    var h = String(now.getHours()).padStart(2, "0");
+                    var mi = String(now.getMinutes()).padStart(2, "0");
+                    var s = String(now.getSeconds()).padStart(2, "0");
+                    var el = document.getElementById("liveClock");
+                    if (el)
+                        el.textContent =
+                            y +
+                            "-" +
+                            mo +
+                            "-" +
+                            d +
+                            " " +
+                            h +
+                            ":" +
+                            mi +
+                            ":" +
+                            s;
+                }
+                updateClock();
+                setInterval(updateClock, 1000);
+            })();
+        </script>
+    </body>
+</html>
+{{end}}

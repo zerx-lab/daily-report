@@ -1,0 +1,514 @@
+{{/* 基础布局模板 - 定义可复用的页面组件 */}}
+{{/* 其他页面通过 {{template "head" .}} 等方式引用这些组件 */}}
+
+{{define "head"}}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{if .title}}{{.title}} - {{end}}日报助手</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --color-primary: #4361ee;
+            --color-primary-hover: #3a56d4;
+            --color-success: #06d6a0;
+            --color-success-hover: #05b888;
+            --color-warning: #ffd166;
+            --color-warning-hover: #f0c050;
+            --color-danger: #ef476f;
+            --color-danger-hover: #d93d63;
+            --color-navbar: #1a1a2e;
+            --color-bg: #f8f9fb;
+            --color-card: #ffffff;
+            --color-text: #1a1a2e;
+            --color-text-muted: #6c757d;
+            --color-border: #e9ecef;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+        }
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+        body {
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+                         "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+            font-size: 14.5px;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* ========== 导航栏 ========== */
+        .navbar {
+            background-color: var(--color-navbar) !important;
+            border: none;
+            box-shadow: none;
+            padding: 0.6rem 0;
+        }
+        .navbar-brand {
+            color: #ffffff !important;
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 0.02em;
+        }
+        .navbar-brand i {
+            font-size: 1.2rem;
+        }
+        .navbar .nav-link {
+            color: rgba(255,255,255,0.7) !important;
+            font-size: 0.9rem;
+            padding: 0.45rem 0.9rem !important;
+            border-radius: var(--radius-sm);
+            transition: color 0.15s ease, background-color 0.15s ease;
+            margin: 0 2px;
+        }
+        .navbar .nav-link:hover {
+            color: #ffffff !important;
+            background-color: rgba(255,255,255,0.08);
+        }
+        .navbar .nav-link.active {
+            color: #ffffff !important;
+            background-color: rgba(255,255,255,0.14);
+            font-weight: 600;
+        }
+        .navbar-toggler {
+            border-color: rgba(255,255,255,0.2);
+            padding: 0.35rem 0.6rem;
+        }
+        .navbar-toggler:focus {
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+        }
+        /* ========== 主体 ========== */
+        .main-content {
+            flex: 1;
+            padding-top: 1.75rem;
+            padding-bottom: 2.5rem;
+        }
+        /* ========== 卡片 ========== */
+        .card {
+            border: none;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            background-color: var(--color-card);
+            transition: box-shadow 0.2s ease;
+        }
+        .card:hover {
+            box-shadow: var(--shadow-md);
+        }
+        .card-header {
+            background-color: var(--color-card);
+            border-bottom: 1px solid var(--color-border);
+            border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+            padding: 1rem 1.25rem;
+        }
+        .card-body {
+            padding: 1.25rem;
+        }
+        .card-footer {
+            background-color: var(--color-card);
+            border-top: 1px solid var(--color-border);
+        }
+        /* ========== 统计卡片 - 左侧竖条装饰 ========== */
+        .stat-card {
+            border-left: 4px solid transparent;
+            border-radius: var(--radius-md);
+        }
+        .stat-card.stat-primary { border-left-color: var(--color-primary); }
+        .stat-card.stat-success { border-left-color: var(--color-success); }
+        .stat-card.stat-warning { border-left-color: var(--color-warning); }
+        .stat-card.stat-danger  { border-left-color: var(--color-danger); }
+        .stat-card .stat-number {
+            font-size: 1.75rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .stat-card .stat-label {
+            font-size: 0.82rem;
+            color: var(--color-text-muted);
+            margin-bottom: 2px;
+        }
+        .stat-card .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+        /* ========== 按钮 ========== */
+        .btn {
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            padding: 0.45rem 1rem;
+            box-shadow: none !important;
+            transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+        .btn-primary {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: var(--color-primary-hover);
+            border-color: var(--color-primary-hover);
+            color: #fff;
+        }
+        .btn-success {
+            background-color: var(--color-success);
+            border-color: var(--color-success);
+            color: #fff;
+        }
+        .btn-success:hover, .btn-success:focus {
+            background-color: var(--color-success-hover);
+            border-color: var(--color-success-hover);
+            color: #fff;
+        }
+        .btn-warning {
+            background-color: var(--color-warning);
+            border-color: var(--color-warning);
+            color: var(--color-text);
+        }
+        .btn-warning:hover, .btn-warning:focus {
+            background-color: var(--color-warning-hover);
+            border-color: var(--color-warning-hover);
+        }
+        .btn-danger {
+            background-color: var(--color-danger);
+            border-color: var(--color-danger);
+            color: #fff;
+        }
+        .btn-danger:hover, .btn-danger:focus {
+            background-color: var(--color-danger-hover);
+            border-color: var(--color-danger-hover);
+            color: #fff;
+        }
+        .btn-outline-primary {
+            color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .btn-outline-success {
+            color: var(--color-success);
+            border-color: var(--color-success);
+        }
+        .btn-outline-success:hover {
+            background-color: var(--color-success);
+            border-color: var(--color-success);
+            color: #fff;
+        }
+        .btn-outline-danger {
+            color: var(--color-danger);
+            border-color: var(--color-danger);
+        }
+        .btn-outline-danger:hover {
+            background-color: var(--color-danger);
+            border-color: var(--color-danger);
+            color: #fff;
+        }
+        .btn-outline-secondary {
+            color: var(--color-text-muted);
+            border-color: #ced4da;
+        }
+        .btn-outline-secondary:hover {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: #fff;
+        }
+        .btn-sm {
+            padding: 0.3rem 0.7rem;
+            font-size: 0.8125rem;
+        }
+        .btn-action {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        /* ========== 表格 ========== */
+        .table {
+            margin-bottom: 0;
+            font-size: 0.875rem;
+        }
+        .table thead th {
+            font-weight: 600;
+            font-size: 0.8125rem;
+            text-transform: none;
+            color: var(--color-text-muted);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.75rem 1rem;
+            white-space: nowrap;
+            background-color: #fafbfc;
+        }
+        .table tbody td {
+            padding: 0.7rem 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid #f0f2f5;
+            color: var(--color-text);
+        }
+        .table-hover tbody tr:hover {
+            background-color: var(--color-bg);
+        }
+        /* ========== 徽章 ========== */
+        .badge {
+            font-weight: 500;
+            font-size: 0.75rem;
+            padding: 0.35em 0.65em;
+            border-radius: 6px;
+        }
+        .badge.bg-secondary {
+            background-color: #e9ecef !important;
+            color: #6c757d !important;
+        }
+        .badge.bg-primary {
+            background-color: rgba(67,97,238,0.12) !important;
+            color: var(--color-primary) !important;
+        }
+        .badge.bg-success {
+            background-color: rgba(6,214,160,0.12) !important;
+            color: #059669 !important;
+        }
+        .badge.bg-danger {
+            background-color: rgba(239,71,111,0.12) !important;
+            color: var(--color-danger) !important;
+        }
+        .badge.bg-warning {
+            background-color: rgba(255,209,102,0.2) !important;
+            color: #92700c !important;
+        }
+        .badge.bg-info {
+            background-color: rgba(13,202,240,0.12) !important;
+            color: #0a7c8e !important;
+        }
+        /* ========== 表单 ========== */
+        .form-control, .form-select {
+            border-radius: var(--radius-sm);
+            border-color: #dee2e6;
+            font-size: 0.875rem;
+            padding: 0.5rem 0.8rem;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(67,97,238,0.1);
+        }
+        .form-label {
+            font-weight: 500;
+            font-size: 0.8125rem;
+            color: var(--color-text);
+            margin-bottom: 0.3rem;
+        }
+        .form-text {
+            font-size: 0.78rem;
+        }
+        /* ========== Flash 消息 ========== */
+        .flash-container {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 1080;
+            max-width: 420px;
+            width: 100%;
+        }
+        .flash-container .alert {
+            border: none;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-md);
+            animation: flashSlideIn 0.3s ease-out;
+            font-size: 0.875rem;
+        }
+        @keyframes flashSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to   { transform: translateX(0); opacity: 1; }
+        }
+        /* ========== Footer ========== */
+        .footer {
+            background-color: var(--color-card);
+            border-top: 1px solid var(--color-border);
+            padding: 0.85rem 0;
+            color: var(--color-text-muted);
+            font-size: 0.8rem;
+            margin-top: auto;
+        }
+        /* ========== 分页 ========== */
+        .pagination .page-link {
+            border-radius: var(--radius-sm);
+            border: 1px solid #dee2e6;
+            color: var(--color-text);
+            font-size: 0.8125rem;
+            padding: 0.3rem 0.65rem;
+            margin: 0 2px;
+        }
+        .pagination .page-link:hover {
+            background-color: var(--color-bg);
+            border-color: #ced4da;
+            color: var(--color-primary);
+        }
+        .pagination .page-item.active .page-link {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .pagination .page-item.disabled .page-link {
+            background-color: transparent;
+            border-color: #dee2e6;
+            color: #adb5bd;
+        }
+        /* ========== 杂项 ========== */
+        .text-primary { color: var(--color-primary) !important; }
+        .text-success { color: #059669 !important; }
+        .text-danger  { color: var(--color-danger) !important; }
+        .text-warning { color: #92700c !important; }
+        .content-preview {
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #495057;
+            font-size: 0.875rem;
+        }
+        .empty-state {
+            padding: 3rem 1rem;
+            text-align: center;
+        }
+        .empty-state i {
+            font-size: 3rem;
+            color: #ced4da;
+            display: block;
+            margin-bottom: 0.75rem;
+        }
+        .empty-state p {
+            color: var(--color-text-muted);
+            margin-bottom: 1rem;
+        }
+        /* 模态框 */
+        .modal-content {
+            border: none;
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+        }
+        .modal-header {
+            border-bottom: 1px solid var(--color-border);
+            padding: 1rem 1.25rem;
+        }
+        .modal-footer {
+            border-top: 1px solid var(--color-border);
+            padding: 0.85rem 1.25rem;
+        }
+        /* Switch */
+        .form-switch .form-check-input {
+            width: 2.5em;
+            height: 1.3em;
+            cursor: pointer;
+        }
+        .form-switch .form-check-input:checked {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+    </style>
+</head>
+{{end}}
+
+{{define "navbar"}}
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/">
+            <i class="bi bi-journal-text me-2"></i>日报助手
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .active "dashboard"}} active{{end}}" href="/">
+                        <i class="bi bi-speedometer2 me-1"></i>仪表盘
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .active "reports"}} active{{end}}" href="/reports">
+                        <i class="bi bi-file-earmark-text me-1"></i>日报管理
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .active "logs"}} active{{end}}" href="/logs">
+                        <i class="bi bi-envelope me-1"></i>发送记录
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .active "schedules"}} active{{end}}" href="/schedule">
+                        <i class="bi bi-clock-history me-1"></i>定时任务
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .active "settings"}} active{{end}}" href="/settings">
+                        <i class="bi bi-gear me-1"></i>系统设置
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{{end}}
+
+{{define "flash"}}
+<div class="flash-container" id="flashContainer"></div>
+{{end}}
+
+{{define "footer"}}
+<footer class="footer">
+    <div class="container text-center">
+        <span>&copy; {{currentYear}} 日报助手 &mdash; 基于思源笔记的日报自动化系统</span>
+    </div>
+</footer>
+{{end}}
+
+{{define "scripts"}}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+<script>
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var flashLevel = params.get('flash_level');
+    var flashMsg = params.get('flash_msg');
+    if (flashMsg) {
+        var levelMap = { 'success': 'success', 'error': 'danger', 'warning': 'warning', 'info': 'info' };
+        var iconMap = { 'success': 'bi-check-circle-fill', 'error': 'bi-exclamation-triangle-fill', 'warning': 'bi-exclamation-circle-fill', 'info': 'bi-info-circle-fill' };
+        var bsLevel = levelMap[flashLevel] || 'info';
+        var icon = iconMap[flashLevel] || 'bi-info-circle-fill';
+        var container = document.getElementById('flashContainer');
+        if (container) {
+            var alertEl = document.createElement('div');
+            alertEl.className = 'alert alert-' + bsLevel + ' alert-dismissible fade show d-flex align-items-center';
+            alertEl.setAttribute('role', 'alert');
+            alertEl.innerHTML = '<i class="bi ' + icon + ' me-2"></i>' +
+                '<div>' + flashMsg + '</div>' +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>';
+            container.appendChild(alertEl);
+            setTimeout(function() {
+                var bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
+                if (bsAlert) bsAlert.close();
+            }, 5000);
+        }
+        params.delete('flash_level');
+        params.delete('flash_msg');
+        var newQuery = params.toString();
+        var newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
+        window.history.replaceState({}, '', newUrl);
+    }
+})();
+</script>
+{{end}}

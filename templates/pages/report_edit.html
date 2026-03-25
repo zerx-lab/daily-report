@@ -1,0 +1,487 @@
+{{define "report_edit.html"}}
+<!doctype html>
+<html lang="zh-CN">
+    {{template "head" .}}
+    <body>
+        {{template "navbar" .}} {{template "flash" .}}
+
+        <style>
+            .content-textarea {
+                min-height: 320px;
+                font-size: 0.9rem;
+                line-height: 1.8;
+                resize: vertical;
+                border-color: #dee2e6;
+                border-radius: var(--radius-sm);
+                transition:
+                    border-color 0.15s ease,
+                    box-shadow 0.15s ease;
+            }
+            .content-textarea:focus {
+                border-color: var(--color-primary);
+                box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+            }
+            .char-count {
+                font-size: 0.78rem;
+                color: var(--color-text-muted);
+            }
+            .meta-bar {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                flex-wrap: wrap;
+                padding: 0.6rem 0;
+            }
+            .meta-bar .meta-item {
+                display: flex;
+                align-items: center;
+                gap: 0.35rem;
+                font-size: 0.85rem;
+                color: var(--color-text-muted);
+            }
+            .meta-bar .meta-item i {
+                font-size: 1rem;
+            }
+            .action-bar {
+                position: sticky;
+                bottom: 0;
+                background-color: var(--color-card);
+                border-top: 1px solid var(--color-border);
+                padding: 0.75rem 1.25rem;
+                margin: 0 -1.25rem -1.25rem -1.25rem;
+                border-radius: 0 0 var(--radius-md) var(--radius-md);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .log-table-container {
+                max-height: 360px;
+                overflow-y: auto;
+            }
+        </style>
+
+        <div class="main-content">
+            <div class="container" style="max-width: 960px">
+                <!-- 面包屑 -->
+                <nav aria-label="breadcrumb" class="mb-3">
+                    <ol class="breadcrumb mb-0" style="font-size: 0.85rem">
+                        <li class="breadcrumb-item">
+                            <a
+                                href="/reports"
+                                class="text-decoration-none"
+                                style="color: var(--color-primary)"
+                                >日报管理</a
+                            >
+                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">
+                            {{if .isNew}}创建日报{{else}}编辑日报{{end}}
+                        </li>
+                    </ol>
+                </nav>
+
+                <!-- 标题栏 -->
+                <div
+                    class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2"
+                >
+                    <h5 class="mb-0 fw-bold">
+                        {{if .isNew}}
+                        <i
+                            class="bi bi-plus-circle me-2"
+                            style="color: var(--color-primary)"
+                        ></i
+                        >创建日报 {{else}}
+                        <i
+                            class="bi bi-pencil-square me-2"
+                            style="color: var(--color-primary)"
+                        ></i
+                        >编辑日报 {{end}}
+                    </h5>
+                    {{if not .isNew}}{{if .report}}
+                    <span class="badge bg-{{statusBadge .report.Status}}"
+                        >{{statusText .report.Status}}</span
+                    >
+                    {{end}}{{end}}
+                </div>
+
+                <!-- 编辑表单 -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <form
+                            method="POST"
+                            action="{{if .isNew}}/reports/new{{else}}/reports/{{.report.ID}}/edit{{end}}"
+                            id="reportForm"
+                        >
+                            <!-- 日期信息 -->
+                            <div class="row mb-3">
+                                <div class="col-sm-6">
+                                    <label class="form-label"
+                                        ><i class="bi bi-calendar3 me-1"></i
+                                        >日期</label
+                                    >
+                                    {{if .isNew}}
+                                    <input
+                                        type="date"
+                                        class="form-control"
+                                        name="date"
+                                        value="{{.date}}"
+                                        required
+                                    />
+                                    {{else}}
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        value="{{.date}}"
+                                        disabled
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="date"
+                                        value="{{.date}}"
+                                    />
+                                    {{end}}
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="form-label"
+                                        ><i class="bi bi-calendar-week me-1"></i
+                                        >星期</label
+                                    >
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        value="{{.weekday}}"
+                                        disabled
+                                    />
+                                </div>
+                            </div>
+
+                            {{if not .isNew}}{{if .report}}
+                            <div class="meta-bar mb-2">
+                                {{if .report.SiyuanID}}
+                                <span class="meta-item">
+                                    <i
+                                        class="bi bi-cloud-check"
+                                        style="color: #059669"
+                                    ></i>
+                                    <span>已同步思源</span>
+                                    {{if .report.SyncedAt}}
+                                    <small class="text-muted"
+                                        >({{formatDateTimePtr
+                                        .report.SyncedAt}})</small
+                                    >
+                                    {{end}}
+                                </span>
+                                {{end}} {{if .report.SentAt}}
+                                <span class="meta-item">
+                                    <i
+                                        class="bi bi-envelope-check"
+                                        style="color: #059669"
+                                    ></i>
+                                    <span>已发送</span>
+                                    <small class="text-muted"
+                                        >({{formatDateTimePtr
+                                        .report.SentAt}})</small
+                                    >
+                                </span>
+                                {{end}}
+                                <span class="meta-item">
+                                    <i class="bi bi-clock"></i>
+                                    <span
+                                        >创建于 {{formatDateTime
+                                        .report.CreatedAt}}</span
+                                    >
+                                </span>
+                            </div>
+                            {{end}}{{end}}
+
+                            <!-- 日报内容 -->
+                            <div class="mb-3">
+                                <label class="form-label"
+                                    ><i class="bi bi-card-text me-1"></i
+                                    >工作内容</label
+                                >
+                                <textarea
+                                    class="form-control content-textarea"
+                                    name="content"
+                                    id="contentArea"
+                                    placeholder="请输入今日工作内容…"
+                                >
+{{if not .isNew}}{{if .report}}{{.report.Content}}{{end}}{{end}}</textarea
+                                >
+                                <div
+                                    class="d-flex justify-content-between mt-1"
+                                >
+                                    <span class="char-count"
+                                        ><span id="charCount">0</span>
+                                        个字符</span
+                                    >
+                                    <span class="char-count"
+                                        >支持换行，将以纯文本方式发送</span
+                                    >
+                                </div>
+                            </div>
+
+                            <!-- 操作栏 -->
+                            <div class="action-bar">
+                                <div class="d-flex gap-2">
+                                    <button
+                                        type="submit"
+                                        class="btn btn-primary btn-sm"
+                                    >
+                                        <i class="bi bi-check-lg me-1"></i>{{if
+                                        .isNew}}创建日报{{else}}保存修改{{end}}
+                                    </button>
+                                    {{if not .isNew}}{{if .report}}
+                                    <button
+                                        type="button"
+                                        class="btn btn-success btn-sm"
+                                        id="btnSend"
+                                        onclick="sendReport({{.report.ID}})"
+                                    >
+                                        <i class="bi bi-send me-1"></i
+                                        >保存并发送
+                                    </button>
+                                    {{end}}{{end}}
+                                </div>
+                                <div class="d-flex gap-2 align-items-center">
+                                    {{if not .isNew}}{{if .report}}
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-danger btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deleteModal"
+                                    >
+                                        <i class="bi bi-trash me-1"></i>删除
+                                    </button>
+                                    {{end}}{{end}}
+                                    <a
+                                        href="/reports"
+                                        class="btn btn-outline-secondary btn-sm"
+                                    >
+                                        <i class="bi bi-arrow-left me-1"></i
+                                        >返回列表
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 发送记录（仅编辑模式） -->
+                {{if not .isNew}}{{if .sendLogs}}
+                <div class="card mb-4">
+                    <div
+                        class="card-header d-flex align-items-center justify-content-between"
+                    >
+                        <h6 class="mb-0 fw-bold">
+                            <i
+                                class="bi bi-envelope me-2"
+                                style="color: var(--color-text-muted)"
+                            ></i
+                            >发送记录
+                            <span
+                                class="badge bg-secondary ms-1"
+                                style="font-size: 0.7rem"
+                                >{{len .sendLogs}}</span
+                            >
+                        </h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="log-table-container">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>时间</th>
+                                            <th>主题</th>
+                                            <th>收件人</th>
+                                            <th>方式</th>
+                                            <th>状态</th>
+                                            <th>备注</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{range $i, $log := .sendLogs}}
+                                        <tr>
+                                            <td class="text-muted">
+                                                {{add $i 1}}
+                                            </td>
+                                            <td class="text-nowrap small">
+                                                {{formatDateTimePtr
+                                                $log.SentAt}}
+                                            </td>
+                                            <td title="{{$log.Subject}}">
+                                                {{truncate $log.Subject 20}}
+                                            </td>
+                                            <td title="{{$log.Recipients}}">
+                                                {{truncate $log.Recipients 24}}
+                                            </td>
+                                            <td>
+                                                {{if eqInt $log.SendType 0}}
+                                                <span class="badge bg-secondary"
+                                                    >手动</span
+                                                >
+                                                {{else}}
+                                                <span class="badge bg-primary"
+                                                    >自动</span
+                                                >
+                                                {{end}}
+                                            </td>
+                                            <td>
+                                                <span
+                                                    class="badge bg-{{emailStatusBadge $log.Status}}"
+                                                    >{{emailStatusText
+                                                    $log.Status}}</span
+                                                >
+                                            </td>
+                                            <td>
+                                                {{if $log.ErrorMsg}}
+                                                <span
+                                                    class="text-danger small"
+                                                    title="{{$log.ErrorMsg}}"
+                                                    ><i
+                                                        class="bi bi-exclamation-circle me-1"
+                                                    ></i
+                                                    >{{truncate $log.ErrorMsg
+                                                    30}}</span
+                                                >
+                                                {{else}}
+                                                <span class="text-muted"
+                                                    >-</span
+                                                >
+                                                {{end}}
+                                            </td>
+                                        </tr>
+                                        {{end}}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{end}}{{end}}
+            </div>
+        </div>
+
+        <!-- 删除确认 Modal（仅编辑模式） -->
+        {{if not .isNew}}{{if .report}}
+        <div
+            class="modal fade"
+            id="deleteModal"
+            tabindex="-1"
+            aria-hidden="true"
+        >
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title">
+                            <i
+                                class="bi bi-exclamation-triangle me-2"
+                                style="color: var(--color-danger)"
+                            ></i
+                            >确认删除
+                        </h6>
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="关闭"
+                        ></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-1">
+                            确定要删除 <strong>{{.date}}</strong> 的日报吗？
+                        </p>
+                        <p class="text-muted small mb-0">
+                            此操作不可撤销，相关的发送记录也将被删除。
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            data-bs-dismiss="modal"
+                        >
+                            取消
+                        </button>
+                        <form
+                            method="POST"
+                            action="/reports/{{.report.ID}}/delete"
+                            class="d-inline"
+                        >
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash me-1"></i>确认删除
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{end}}{{end}} {{template "footer" .}} {{template "scripts" .}}
+        <script>
+            (function () {
+                // 字数统计
+                var textarea = document.getElementById("contentArea");
+                var charCount = document.getElementById("charCount");
+                function updateCount() {
+                    var len = textarea.value.length;
+                    charCount.textContent = len;
+                }
+                if (textarea && charCount) {
+                    textarea.addEventListener("input", updateCount);
+                    updateCount();
+                }
+            })();
+
+            // 保存并发送
+            function sendReport(reportId) {
+                var form = document.getElementById("reportForm");
+                if (!form) return;
+
+                // 先通过 fetch 提交表单保存
+                var formData = new FormData(form);
+                fetch(form.action, {
+                    method: "POST",
+                    body: formData,
+                })
+                    .then(function (response) {
+                        if (response.ok || response.redirected) {
+                            // 保存成功后，提交发送
+                            var sendForm = document.createElement("form");
+                            sendForm.method = "POST";
+                            sendForm.action = "/reports/" + reportId + "/send";
+                            document.body.appendChild(sendForm);
+                            sendForm.submit();
+                        } else {
+                            alert("保存失败，请重试");
+                        }
+                    })
+                    .catch(function () {
+                        alert("网络请求失败，请检查网络连接");
+                    });
+            }
+
+            // Tab 键插入空格
+            (function () {
+                var ta = document.getElementById("contentArea");
+                if (!ta) return;
+                ta.addEventListener("keydown", function (e) {
+                    if (e.key === "Tab") {
+                        e.preventDefault();
+                        var start = ta.selectionStart;
+                        var end = ta.selectionEnd;
+                        ta.value =
+                            ta.value.substring(0, start) +
+                            "    " +
+                            ta.value.substring(end);
+                        ta.selectionStart = ta.selectionEnd = start + 4;
+                        ta.dispatchEvent(new Event("input"));
+                    }
+                });
+            })();
+        </script>
+    </body>
+</html>
+{{end}}

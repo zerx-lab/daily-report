@@ -1,0 +1,542 @@
+{{define "schedules.html"}}
+<!doctype html>
+<html lang="zh-CN">
+{{template "head" .}}
+<body>
+{{template "navbar" .}}
+{{template "flash" .}}
+
+<style>
+    .job-card {
+        border: none;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-sm);
+        background-color: var(--color-card);
+        transition: box-shadow 0.2s ease;
+        overflow: hidden;
+    }
+    .job-card:hover {
+        box-shadow: var(--shadow-md);
+    }
+    .job-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .job-card-body {
+        padding: 1rem 1.25rem;
+    }
+    .job-card-footer {
+        padding: 0.75rem 1.25rem;
+        background-color: #fafbfc;
+        border-top: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .job-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        flex-shrink: 0;
+    }
+    .job-icon.icon-create {
+        background-color: rgba(67,97,238,0.1);
+        color: var(--color-primary);
+    }
+    .job-icon.icon-send {
+        background-color: rgba(6,214,160,0.1);
+        color: #059669;
+    }
+    .job-icon.icon-sync {
+        background-color: rgba(255,159,67,0.1);
+        color: #e67e22;
+    }
+    .job-meta {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .job-meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .job-meta-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--color-text-muted);
+        font-weight: 500;
+    }
+    .job-meta-value {
+        font-size: 0.85rem;
+        color: var(--color-text);
+    }
+    .cron-code {
+        font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+        font-size: 0.82rem;
+        background-color: #f0f2f5;
+        padding: 3px 8px;
+        border-radius: 5px;
+        color: var(--color-text);
+        display: inline-block;
+    }
+    .scheduler-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.82rem;
+        font-weight: 500;
+    }
+    .scheduler-status .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .scheduler-status .dot.running {
+        background-color: var(--color-success);
+        box-shadow: 0 0 0 3px rgba(6,214,160,0.2);
+    }
+    .scheduler-status .dot.stopped {
+        background-color: #adb5bd;
+        box-shadow: 0 0 0 3px rgba(173,181,189,0.2);
+    }
+    .cron-help-table {
+        font-size: 0.8rem;
+        margin-bottom: 0;
+    }
+    .cron-help-table td,
+    .cron-help-table th {
+        padding: 0.3rem 0.6rem;
+        border-color: var(--color-border);
+    }
+    .cron-help-table code {
+        font-size: 0.78rem;
+        background-color: #f0f2f5;
+        padding: 1px 5px;
+        border-radius: 3px;
+    }
+</style>
+
+<div class="main-content">
+    <div class="container">
+
+        <!-- 页面标题 -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <h5 class="mb-0 fw-bold">
+                    <i class="bi bi-clock-history me-2" style="color:var(--color-primary)"></i>定时任务
+                </h5>
+                <span class="scheduler-status">
+                    {{if .isRunning}}
+                    <span class="dot running"></span>
+                    <span style="color:#059669">调度器运行中</span>
+                    {{else}}
+                    <span class="dot stopped"></span>
+                    <span class="text-muted">调度器已停止</span>
+                    {{end}}
+                </span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="location.reload()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>刷新状态
+                </button>
+            </div>
+        </div>
+
+        <!-- 任务卡片列表 -->
+        {{if .jobs}}
+        <div class="row g-4 mb-4">
+            {{range .jobs}}
+            <div class="col-lg-6">
+                <div class="job-card" id="jobCard_{{index . "task_type"}}">
+                    <!-- 卡片头部 -->
+                    <div class="job-card-header">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="job-icon {{if eq (index . "task_type") "create"}}icon-create{{else if eq (index . "task_type") "send"}}icon-send{{else if eq (index . "task_type") "sync"}}icon-sync{{end}}">
+                                {{if eq (index . "task_type") "create"}}
+                                <i class="bi bi-journal-plus"></i>
+                                {{else if eq (index . "task_type") "send"}}
+                                <i class="bi bi-envelope-arrow-up"></i>
+                                {{else if eq (index . "task_type") "sync"}}
+                                <i class="bi bi-arrow-repeat"></i>
+                                {{end}}
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold" style="font-size:0.95rem">{{index . "task_name"}}</h6>
+                                {{if index . "description"}}
+                                <small class="text-muted" style="font-size:0.78rem">{{index . "description"}}</small>
+                                {{end}}
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            {{if index . "enabled"}}
+                            <span class="badge bg-success">已启用</span>
+                            {{else}}
+                            <span class="badge bg-secondary">已停用</span>
+                            {{end}}
+                        </div>
+                    </div>
+
+                    <!-- 卡片内容 -->
+                    <div class="job-card-body">
+                        <div class="job-meta">
+                            <div class="job-meta-item">
+                                <span class="job-meta-label">Cron 表达式</span>
+                                <span class="job-meta-value">
+                                    <span class="cron-code" id="cronDisplay_{{index . "task_type"}}">{{index . "cron_expr"}}</span>
+                                </span>
+                            </div>
+                            <div class="job-meta-item">
+                                <span class="job-meta-label">上次运行</span>
+                                <span class="job-meta-value">
+                                    {{if index . "last_run_at"}}
+                                    {{index . "last_run_at"}}
+                                    {{else}}
+                                    <span class="text-muted">从未运行</span>
+                                    {{end}}
+                                </span>
+                            </div>
+                            <div class="job-meta-item">
+                                <span class="job-meta-label">下次运行</span>
+                                <span class="job-meta-value">
+                                    {{if index . "next_run_at"}}
+                                    {{index . "next_run_at"}}
+                                    {{else}}
+                                    <span class="text-muted">-</span>
+                                    {{end}}
+                                </span>
+                            </div>
+                            <div class="job-meta-item">
+                                <span class="job-meta-label">上次结果</span>
+                                <span class="job-meta-value">
+                                    {{if index . "last_result"}}
+                                        {{if eq (index . "last_result") "success"}}
+                                        <span style="color:#059669"><i class="bi bi-check-circle-fill me-1"></i>成功</span>
+                                        {{else if eq (index . "last_result") "failed"}}
+                                        <span style="color:var(--color-danger)"><i class="bi bi-x-circle-fill me-1"></i>失败</span>
+                                        {{else}}
+                                        <span class="text-muted">{{index . "last_result"}}</span>
+                                        {{end}}
+                                    {{else}}
+                                    <span class="text-muted">-</span>
+                                    {{end}}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 卡片操作栏 -->
+                    <div class="job-card-footer">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="toggle_{{index . "task_type"}}"
+                                       {{if index . "enabled"}}checked{{end}}
+                                       onchange="toggleJob('{{index . "task_type"}}', this.checked)">
+                                <label class="form-check-label" for="toggle_{{index . "task_type"}}" style="font-size:0.82rem">
+                                    {{if index . "enabled"}}已启用{{else}}已停用{{end}}
+                                </label>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    onclick="showCronEditor('{{index . "task_type"}}', '{{index . "cron_expr"}}', '{{index . "task_name"}}')">
+                                <i class="bi bi-pencil me-1"></i>编辑 Cron
+                            </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm"
+                                    onclick="triggerJob('{{index . "task_type"}}', '{{index . "task_name"}}')">
+                                <i class="bi bi-play-fill me-1"></i>立即执行
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="card mb-4">
+            <div class="empty-state">
+                <i class="bi bi-clock"></i>
+                <p class="mb-0">暂无定时任务</p>
+            </div>
+        </div>
+        {{end}}
+
+        <!-- Cron 表达式参考 -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 fw-bold" style="font-size:0.9rem">
+                    <i class="bi bi-question-circle me-2" style="color:var(--color-text-muted)"></i>Cron 表达式参考
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <p class="fw-medium mb-2" style="font-size:0.82rem;color:var(--color-text-muted)">6 位格式：秒 分 时 日 月 周</p>
+                        <table class="table table-sm cron-help-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:45%">表达式</th>
+                                    <th>说明</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>0 0 9 * * 1-5</code></td><td>工作日每天 09:00</td></tr>
+                                <tr><td><code>0 30 8 * * 1-5</code></td><td>工作日每天 08:30</td></tr>
+                                <tr><td><code>0 0 18 * * 1-5</code></td><td>工作日每天 18:00</td></tr>
+                                <tr><td><code>0 0 20 * * *</code></td><td>每天 20:00</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="fw-medium mb-2" style="font-size:0.82rem;color:var(--color-text-muted)">各字段取值范围</p>
+                        <table class="table table-sm cron-help-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:30%">字段</th>
+                                    <th style="width:30%">取值</th>
+                                    <th>特殊字符</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>秒</td><td>0-59</td><td><code>* , - /</code></td></tr>
+                                <tr><td>分</td><td>0-59</td><td><code>* , - /</code></td></tr>
+                                <tr><td>时</td><td>0-23</td><td><code>* , - /</code></td></tr>
+                                <tr><td>日</td><td>1-31</td><td><code>* , - / ?</code></td></tr>
+                                <tr><td>月</td><td>1-12</td><td><code>* , - /</code></td></tr>
+                                <tr><td>周</td><td>0-6 (0=周日)</td><td><code>* , - / ?</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- 编辑 Cron Modal -->
+<div class="modal fade" id="cronModal" tabindex="-1" aria-labelledby="cronModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="cronModalLabel">
+                    <i class="bi bi-pencil-square me-2" style="color:var(--color-primary)"></i>编辑 Cron 表达式
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="cronTaskType">
+                <div class="mb-3">
+                    <label class="form-label">任务名称</label>
+                    <p class="mb-0 fw-medium" id="cronTaskName">-</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="cronExprInput">Cron 表达式</label>
+                    <input type="text" class="form-control" id="cronExprInput" placeholder="如: 0 0 9 * * 1-5">
+                    <div class="form-text">6 位格式：秒 分 时 日 月 周</div>
+                </div>
+                <div>
+                    <label class="form-label" style="font-size:0.8rem;color:var(--color-text-muted)">快速选择</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('cronExprInput').value='0 0 9 * * 1-5'">
+                            工作日 09:00
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('cronExprInput').value='0 30 8 * * 1-5'">
+                            工作日 08:30
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('cronExprInput').value='0 0 18 * * 1-5'">
+                            工作日 18:00
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('cronExprInput').value='0 0 20 * * 1-5'">
+                            工作日 20:00
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('cronExprInput').value='0 0 20 * * *'">
+                            每天 20:00
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveCron()">
+                    <i class="bi bi-check-lg me-1"></i>保存
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 确认执行 Modal -->
+<div class="modal fade" id="triggerModal" tabindex="-1" aria-labelledby="triggerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="triggerModalLabel">
+                    <i class="bi bi-play-circle me-2" style="color:var(--color-primary)"></i>确认执行
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="triggerTaskType">
+                <p class="mb-1">确定立即执行 <strong id="triggerTaskName">-</strong> 吗？</p>
+                <p class="text-muted small mb-0">此操作将立即触发任务执行，不影响正常调度。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="confirmTrigger()">
+                    <i class="bi bi-play-fill me-1"></i>确认执行
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{template "footer" .}}
+{{template "scripts" .}}
+<script>
+// 显示临时消息
+function showToast(message, level) {
+    var container = document.getElementById('flashContainer');
+    if (!container) return;
+    var typeMap = { success: 'success', error: 'danger', warning: 'warning', info: 'info' };
+    var iconMap = { success: 'bi-check-circle-fill', error: 'bi-exclamation-triangle-fill', warning: 'bi-exclamation-circle-fill', info: 'bi-info-circle-fill' };
+    var bsLevel = typeMap[level] || 'info';
+    var icon = iconMap[level] || 'bi-info-circle-fill';
+    var alertEl = document.createElement('div');
+    alertEl.className = 'alert alert-' + bsLevel + ' alert-dismissible fade show d-flex align-items-center';
+    alertEl.setAttribute('role', 'alert');
+    alertEl.innerHTML = '<i class="bi ' + icon + ' me-2"></i><div>' + message + '</div>' +
+        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>';
+    container.appendChild(alertEl);
+    setTimeout(function() {
+        var bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
+        if (bsAlert) bsAlert.close();
+    }, 4000);
+}
+
+// 切换任务启用/停用
+function toggleJob(taskType, enabled) {
+    var action = enabled ? 'enable' : 'disable';
+    var label = document.querySelector('label[for="toggle_' + taskType + '"]');
+    if (label) label.textContent = enabled ? '切换中…' : '切换中…';
+
+    var formData = new FormData();
+    formData.append('task_type', taskType);
+    formData.append('action', action);
+
+    fetch('/schedule/toggle', {
+        method: 'POST',
+        body: formData
+    }).then(function(resp) {
+        if (resp.redirected) {
+            window.location.href = resp.url;
+            return;
+        }
+        return resp.text();
+    }).then(function() {
+        // 刷新页面以获取最新状态
+        window.location.reload();
+    }).catch(function(err) {
+        showToast('操作失败: ' + err.message, 'error');
+        // 恢复开关状态
+        var toggle = document.getElementById('toggle_' + taskType);
+        if (toggle) toggle.checked = !enabled;
+        if (label) label.textContent = enabled ? '已停用' : '已启用';
+    });
+}
+
+// 显示 Cron 编辑弹窗
+function showCronEditor(taskType, currentCron, taskName) {
+    document.getElementById('cronTaskType').value = taskType;
+    document.getElementById('cronTaskName').textContent = taskName;
+    document.getElementById('cronExprInput').value = currentCron;
+    new bootstrap.Modal(document.getElementById('cronModal')).show();
+}
+
+// 保存 Cron 表达式
+function saveCron() {
+    var taskType = document.getElementById('cronTaskType').value;
+    var cronExpr = document.getElementById('cronExprInput').value.trim();
+    if (!cronExpr) {
+        showToast('请输入 Cron 表达式', 'warning');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('task_type', taskType);
+    formData.append('cron_expr', cronExpr);
+
+    fetch('/schedule/cron', {
+        method: 'POST',
+        body: formData
+    }).then(function(resp) {
+        if (resp.redirected) {
+            window.location.href = resp.url;
+            return;
+        }
+        return resp.text();
+    }).then(function() {
+        var modal = bootstrap.Modal.getInstance(document.getElementById('cronModal'));
+        if (modal) modal.hide();
+        window.location.reload();
+    }).catch(function(err) {
+        showToast('保存失败: ' + err.message, 'error');
+    });
+}
+
+// 触发任务弹窗
+function triggerJob(taskType, taskName) {
+    document.getElementById('triggerTaskType').value = taskType;
+    document.getElementById('triggerTaskName').textContent = taskName;
+    new bootstrap.Modal(document.getElementById('triggerModal')).show();
+}
+
+// 确认立即执行
+function confirmTrigger() {
+    var taskType = document.getElementById('triggerTaskType').value;
+    var btn = document.querySelector('#triggerModal .btn-primary');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>执行中…';
+    }
+
+    var formData = new FormData();
+    formData.append('task_type', taskType);
+
+    fetch('/schedule/trigger', {
+        method: 'POST',
+        body: formData
+    }).then(function(resp) {
+        if (resp.redirected) {
+            window.location.href = resp.url;
+            return;
+        }
+        return resp.text();
+    }).then(function() {
+        var modal = bootstrap.Modal.getInstance(document.getElementById('triggerModal'));
+        if (modal) modal.hide();
+        window.location.reload();
+    }).catch(function(err) {
+        showToast('执行失败: ' + err.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>确认执行';
+        }
+    });
+}
+</script>
+</body>
+</html>
+{{end}}

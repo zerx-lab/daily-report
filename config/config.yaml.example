@@ -1,0 +1,64 @@
+# ============================================================
+# 日报自动化系统 - 配置文件示例
+# 复制此文件为 config.yaml 并填写实际配置
+# cp config.yaml.example config.yaml
+# ============================================================
+
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "debug"  # debug / release / test
+
+# 数据库配置
+database:
+  path: "./data/daily_report.db"
+
+# 思源笔记配置
+siyuan:
+  base_url: "https://your-siyuan-instance.example.com"
+  token: "your-siyuan-api-token"
+  notebook_id: "your-notebook-id"
+  document_id: "your-document-id"
+  av_id: "your-attribute-view-id"
+  block_id: "your-database-block-id"
+  view_id: "your-view-id"
+  key_content_id: "your-content-key-id"
+  key_date_id: "your-date-key-id"
+
+# SMTP 邮件配置
+smtp:
+  host: "smtp.example.com"
+  port: 465
+  username: "your-email@example.com"
+  password: "your-smtp-password"
+  use_tls: true
+  from_name: "日报系统"
+  from_address: "your-email@example.com"
+
+# 邮件收件人配置
+email:
+  recipients:
+    - name: "收件人姓名"
+      address: "recipient@example.com"
+  cc: []
+  subject_template: "{{.Date}} 工作日报 - {{.Author}}"
+  author: "你的姓名"
+
+# 定时调度配置
+scheduler:
+  enabled: true
+  timezone: "Asia/Shanghai"
+  # 每个工作日自动创建日报条目（cron 表达式）
+  create_cron: "0 30 8 * * 1-5"    # 周一至周五 08:30
+  # 每个工作日自动发送日报邮件（cron 表达式）
+  send_cron: "0 0 18 * * 1-5"      # 周一至周五 18:00
+  # 是否跳过中国法定节假日
+  skip_holidays: true
+  # 日报创建时的默认内容模板
+  default_content: "待填写"
+
+# 日志配置
+log:
+  level: "info"   # debug / info / warn / error
+  file: "./data/app.log"

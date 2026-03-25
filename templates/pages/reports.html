@@ -1,0 +1,184 @@
+{{define "reports.html"}}
+<!doctype html>
+<html lang="zh-CN">
+{{template "head" .}}
+<body>
+{{template "navbar" .}}
+{{template "flash" .}}
+
+<div class="main-content">
+    <div class="container">
+
+        <!-- 页面标题与操作栏 -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-text me-2" style="color:var(--color-primary)"></i>日报列表</h5>
+            <div class="d-flex gap-2">
+                <form method="POST" action="/reports/create-today" class="d-inline">
+                    <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-calendar-plus me-1"></i>快速创建今日</button>
+                </form>
+                <a href="/reports/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建日报</a>
+            </div>
+        </div>
+
+        <!-- 筛选栏 -->
+        <div class="card mb-4">
+            <div class="card-body py-3">
+                <form method="GET" action="/reports" class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">关键词</label>
+                        <input type="text" class="form-control form-control-sm" name="keyword" value="{{.query.Keyword}}" placeholder="搜索日报内容…">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">状态</label>
+                        <select class="form-select form-select-sm" name="status">
+                            <option value="">全部</option>
+                            <option value="0" {{if and .query.Status (eq (printf "%d" .query.Status) "0")}}selected{{end}}>草稿</option>
+                            <option value="1" {{if and .query.Status (eq (printf "%d" .query.Status) "1")}}selected{{end}}>待发送</option>
+                            <option value="2" {{if and .query.Status (eq (printf "%d" .query.Status) "2")}}selected{{end}}>已发送</option>
+                            <option value="3" {{if and .query.Status (eq (printf "%d" .query.Status) "3")}}selected{{end}}>发送失败</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">开始日期</label>
+                        <input type="date" class="form-control form-control-sm" name="date_from" value="{{.query.DateFrom}}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">结束日期</label>
+                        <input type="date" class="form-control form-control-sm" name="date_to" value="{{.query.DateTo}}">
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>搜索</button>
+                        <a href="/reports" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-circle me-1"></i>重置</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 日报列表 -->
+        <div class="card">
+            <div class="card-body p-0">
+                {{if .reports}}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:48px">#</th>
+                                <th style="width:115px">日期</th>
+                                <th style="width:65px">星期</th>
+                                <th>内容预览</th>
+                                <th style="width:80px">状态</th>
+                                <th style="width:85px">思源同步</th>
+                                <th style="width:165px" class="text-end">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range $i, $r := .reports}}
+                            <tr>
+                                <td class="text-muted">{{rowIndex $.pagination.Page $.pagination.PageSize $i}}</td>
+                                <td class="fw-medium">{{$r.Date}}</td>
+                                <td style="white-space:nowrap">{{$r.Weekday}}</td>
+                                <td class="content-preview" title="{{$r.Content}}">{{if $r.Content}}{{truncate $r.Content 60}}{{else}}<span class="text-muted fst-italic">暂无内容</span>{{end}}</td>
+                                <td><span class="badge bg-{{statusBadge $r.Status}}">{{statusText $r.Status}}</span></td>
+                                <td>
+                                    {{if $r.SiyuanID}}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>已同步</span>
+                                    {{else}}
+                                    <span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>未同步</span>
+                                    {{end}}
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-inline-flex gap-1">
+                                        <a href="/reports/{{$r.ID}}/edit" class="btn btn-outline-primary btn-action" title="编辑"><i class="bi bi-pencil"></i></a>
+                                        {{if ne (statusText $r.Status) "已发送"}}
+                                        <form method="POST" action="/reports/{{$r.ID}}/send" class="d-inline" onsubmit="return confirm('确认发送此日报邮件？')">
+                                            <button type="submit" class="btn btn-outline-success btn-action" title="发送邮件"><i class="bi bi-send"></i></button>
+                                        </form>
+                                        {{end}}
+                                        <button type="button" class="btn btn-outline-danger btn-action" title="删除"
+                                                data-bs-toggle="modal" data-bs-target="#deleteModal"
+                                                data-id="{{$r.ID}}" data-date="{{$r.Date}}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+                {{else}}
+                <div class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    <p>暂无日报记录</p>
+                    <a href="/reports/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建日报</a>
+                </div>
+                {{end}}
+            </div>
+
+            <!-- 分页 -->
+            {{if and .pagination (gt .pagination.TotalPage 1)}}
+            <div class="card-footer d-flex flex-wrap justify-content-between align-items-center py-2">
+                <small class="text-muted">共 {{.pagination.Total}} 条记录，第 {{.pagination.Page}} / {{.pagination.TotalPage}} 页</small>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item{{if le .pagination.Page 1}} disabled{{end}}">
+                            <a class="page-link" href="?page={{sub .pagination.Page 1}}{{if .query.Keyword}}&keyword={{.query.Keyword}}{{end}}{{if .query.DateFrom}}&date_from={{.query.DateFrom}}{{end}}{{if .query.DateTo}}&date_to={{.query.DateTo}}{{end}}{{if .query.Status}}&status={{printf "%d" .query.Status}}{{end}}">&laquo;</a>
+                        </li>
+                        {{range pageRange .pagination.Page .pagination.TotalPage}}
+                        <li class="page-item{{if eq . $.pagination.Page}} active{{end}}">
+                            <a class="page-link" href="?page={{.}}{{if $.query.Keyword}}&keyword={{$.query.Keyword}}{{end}}{{if $.query.DateFrom}}&date_from={{$.query.DateFrom}}{{end}}{{if $.query.DateTo}}&date_to={{$.query.DateTo}}{{end}}{{if $.query.Status}}&status={{printf "%d" $.query.Status}}{{end}}">{{.}}</a>
+                        </li>
+                        {{end}}
+                        <li class="page-item{{if ge .pagination.Page .pagination.TotalPage}} disabled{{end}}">
+                            <a class="page-link" href="?page={{add .pagination.Page 1}}{{if .query.Keyword}}&keyword={{.query.Keyword}}{{end}}{{if .query.DateFrom}}&date_from={{.query.DateFrom}}{{end}}{{if .query.DateTo}}&date_to={{.query.DateTo}}{{end}}{{if .query.Status}}&status={{printf "%d" .query.Status}}{{end}}">&raquo;</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {{end}}
+        </div>
+
+    </div>
+</div>
+
+<!-- 删除确认 Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="deleteModalLabel"><i class="bi bi-exclamation-triangle me-2" style="color:var(--color-danger)"></i>确认删除</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">确定要删除 <strong id="deleteDate"></strong> 的日报吗？</p>
+                <p class="text-muted small mb-0">此操作不可撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash me-1"></i>确认删除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{template "footer" .}}
+{{template "scripts" .}}
+<script>
+(function(){
+    var deleteModal = document.getElementById('deleteModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('show.bs.modal', function(e) {
+            var btn = e.relatedTarget;
+            var id = btn.getAttribute('data-id');
+            var date = btn.getAttribute('data-date');
+            document.getElementById('deleteDate').textContent = date;
+            document.getElementById('deleteForm').action = '/reports/' + id + '/delete';
+        });
+    }
+})();
+</script>
+</body>
+</html>
+{{end}}

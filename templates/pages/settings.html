@@ -1,0 +1,602 @@
+{{define "settings.html"}}
+<!doctype html>
+<html lang="zh-CN">
+{{template "head" .}}
+<body>
+{{template "navbar" .}}
+{{template "flash" .}}
+
+<style>
+    .settings-tabs {
+        border-bottom: 2px solid var(--color-border);
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .settings-tabs .tab-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.65rem 1.1rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--color-text-muted);
+        text-decoration: none;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        white-space: nowrap;
+        transition: color 0.15s ease, border-color 0.15s ease;
+        cursor: pointer;
+        background: none;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+    }
+    .settings-tabs .tab-link:hover {
+        color: var(--color-primary);
+    }
+    .settings-tabs .tab-link.active {
+        color: var(--color-primary);
+        border-bottom-color: var(--color-primary);
+        font-weight: 600;
+    }
+    .settings-tabs .tab-link i {
+        font-size: 1rem;
+    }
+    .settings-section {
+        display: none;
+    }
+    .settings-section.active {
+        display: block;
+    }
+    .settings-card {
+        border: none;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-sm);
+        background-color: var(--color-card);
+    }
+    .settings-card .card-header {
+        background-color: var(--color-card);
+        border-bottom: 1px solid var(--color-border);
+        padding: 1rem 1.25rem;
+        border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+    }
+    .settings-card .card-header h6 {
+        font-size: 0.92rem;
+        font-weight: 700;
+    }
+    .settings-card .card-header small {
+        font-size: 0.78rem;
+        color: var(--color-text-muted);
+    }
+    .settings-card .card-body {
+        padding: 1.25rem;
+    }
+    .setting-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--color-border);
+        margin-top: 1rem;
+    }
+    .password-wrapper {
+        position: relative;
+    }
+    .password-wrapper .toggle-pw {
+        position: absolute;
+        right: 0.6rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        padding: 0.2rem;
+        font-size: 1rem;
+        line-height: 1;
+    }
+    .password-wrapper .toggle-pw:hover {
+        color: var(--color-text);
+    }
+    .password-wrapper input {
+        padding-right: 2.5rem;
+    }
+</style>
+
+<div class="main-content">
+    <div class="container" style="max-width: 900px">
+
+        <!-- 页面标题 -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold">
+                <i class="bi bi-gear me-2" style="color:var(--color-primary)"></i>系统设置
+            </h5>
+        </div>
+
+        <!-- 标签页导航 -->
+        <div class="settings-tabs" id="settingsTabs">
+            <button type="button" class="tab-link active" data-tab="smtp">
+                <i class="bi bi-envelope"></i> SMTP 邮件
+            </button>
+            <button type="button" class="tab-link" data-tab="siyuan">
+                <i class="bi bi-cloud"></i> 思源笔记
+            </button>
+            <button type="button" class="tab-link" data-tab="email">
+                <i class="bi bi-at"></i> 邮件内容
+            </button>
+            <button type="button" class="tab-link" data-tab="general">
+                <i class="bi bi-sliders"></i> 通用设置
+            </button>
+        </div>
+
+        <!-- ============ SMTP 设置 ============ -->
+        <div class="settings-section active" id="section-smtp">
+            <div class="settings-card card">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-envelope me-2"></i>SMTP 邮件服务器</h6>
+                    <small>配置用于发送日报邮件的 SMTP 服务器信息</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings" id="formSmtp">
+                        <input type="hidden" name="category" value="smtp">
+
+                        <div class="row mb-3">
+                            <div class="col-sm-8">
+                                <label class="form-label">SMTP 服务器地址</label>
+                                <input type="text" class="form-control" name="host"
+                                       value="{{if .smtp}}{{index .smtp "host"}}{{end}}"
+                                       placeholder="如 smtp.qq.com">
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label">端口</label>
+                                <input type="text" class="form-control" name="port"
+                                       value="{{if .smtp}}{{index .smtp "port"}}{{end}}"
+                                       placeholder="如 587">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">用户名</label>
+                                <input type="text" class="form-control" name="username"
+                                       value="{{if .smtp}}{{index .smtp "username"}}{{end}}"
+                                       placeholder="SMTP 登录用户名">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">密码 / 授权码</label>
+                                <div class="password-wrapper">
+                                    <input type="password" class="form-control" name="password" id="smtpPassword"
+                                           value="{{if .smtp}}{{index .smtp "password"}}{{end}}"
+                                           placeholder="SMTP 密码或授权码">
+                                    <button type="button" class="toggle-pw" onclick="togglePassword('smtpPassword', this)">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">发件人名称</label>
+                                <input type="text" class="form-control" name="from"
+                                       value="{{if .smtp}}{{index .smtp "from"}}{{end}}"
+                                       placeholder="如 日报助手">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">发件人地址</label>
+                                <input type="email" class="form-control" name="from_addr"
+                                       value="{{if .smtp}}{{index .smtp "from_addr"}}{{end}}"
+                                       placeholder="如 noreply@example.com">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="use_tls" id="smtpUseTls" value="true"
+                                       {{if .smtp}}{{if eq (index .smtp "use_tls") "true"}}checked{{end}}{{end}}>
+                                <label class="form-check-label" for="smtpUseTls" style="font-size:0.85rem">
+                                    启用 TLS 加密连接（推荐）
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存 SMTP 设置
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="testSmtp()">
+                                <i class="bi bi-plug me-1"></i>测试 SMTP 连接
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="testEmail()">
+                                <i class="bi bi-envelope-arrow-up me-1"></i>发送测试邮件
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 思源笔记设置 ============ -->
+        <div class="settings-section" id="section-siyuan">
+            <div class="settings-card card">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-cloud me-2"></i>思源笔记连接</h6>
+                    <small>配置思源笔记 API 连接信息，用于自动同步日报数据</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings" id="formSiyuan">
+                        <input type="hidden" name="category" value="siyuan">
+
+                        <div class="row mb-3">
+                            <div class="col-sm-8">
+                                <label class="form-label">API 地址</label>
+                                <input type="url" class="form-control" name="base_url"
+                                       value="{{if .siyuan}}{{index .siyuan "base_url"}}{{end}}"
+                                       placeholder="如 https://note.zerx.dev">
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label">API Token</label>
+                                <div class="password-wrapper">
+                                    <input type="password" class="form-control" name="api_token" id="siyuanToken"
+                                           value="{{if .siyuan}}{{index .siyuan "api_token"}}{{end}}"
+                                           placeholder="API 授权令牌">
+                                    <button type="button" class="toggle-pw" onclick="togglePassword('siyuanToken', this)">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-3" style="border-color:var(--color-border)">
+                        <p class="text-muted mb-3" style="font-size:0.8rem"><i class="bi bi-info-circle me-1"></i>以下为思源笔记数据库的高级配置，通常无需修改</p>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">属性视图 ID (AV ID)</label>
+                                <input type="text" class="form-control form-control-sm" name="av_id"
+                                       value="{{if .siyuan}}{{index .siyuan "av_id"}}{{end}}"
+                                       placeholder="属性视图 ID">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">数据库块 ID (Block ID)</label>
+                                <input type="text" class="form-control form-control-sm" name="block_id"
+                                       value="{{if .siyuan}}{{index .siyuan "block_id"}}{{end}}"
+                                       placeholder="数据库块 ID">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">主键列 ID (Key ID)</label>
+                                <input type="text" class="form-control form-control-sm" name="key_id"
+                                       value="{{if .siyuan}}{{index .siyuan "key_id"}}{{end}}"
+                                       placeholder="主键列 ID">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">笔记本 ID</label>
+                                <input type="text" class="form-control form-control-sm" name="notebook_id"
+                                       value="{{if .siyuan}}{{index .siyuan "notebook_id"}}{{end}}"
+                                       placeholder="笔记本 ID">
+                            </div>
+                        </div>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存思源设置
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="testSiyuan()">
+                                <i class="bi bi-plug me-1"></i>测试连接
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="syncFromSiyuan()">
+                                <i class="bi bi-cloud-download me-1"></i>从思源同步
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 邮件内容设置 ============ -->
+        <div class="settings-section" id="section-email">
+            <div class="settings-card card">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-at me-2"></i>邮件内容设置</h6>
+                    <small>配置日报邮件的收件人、抄送人和邮件主题模板</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings" id="formEmail">
+                        <input type="hidden" name="category" value="email">
+
+                        <div class="mb-3">
+                            <label class="form-label">收件人</label>
+                            <textarea class="form-control" name="recipients" rows="3"
+                                      placeholder="每行一个邮箱地址，或用逗号分隔">{{if .email}}{{index .email "recipients"}}{{end}}</textarea>
+                            <div class="form-text">日报发送的目标收件人，多个地址换行或逗号分隔</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">抄送 (CC)</label>
+                            <textarea class="form-control" name="cc" rows="2"
+                                      placeholder="每行一个邮箱地址，或用逗号分隔（可选）">{{if .email}}{{index .email "cc"}}{{end}}</textarea>
+                            <div class="form-text">可选，抄送的邮箱地址</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">邮件主题模板</label>
+                            <input type="text" class="form-control" name="subject"
+                                   value="{{if .email}}{{index .email "subject"}}{{end}}"
+                                   placeholder="如: {{.Date}} 工作日报 - {{.Weekday}}">
+                            <div class="form-text">
+                                支持变量：<code>{{"{{"}} .Date {{"}}"}}</code> 日期、<code>{{"{{"}} .Weekday {{"}}"}}</code> 星期、<code>{{"{{"}} .AppName {{"}}"}}</code> 应用名
+                            </div>
+                        </div>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存邮件设置
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 通用设置 ============ -->
+        <div class="settings-section" id="section-general">
+            <div class="settings-card card">
+                <div class="card-header">
+                    <h6 class="mb-1"><i class="bi bi-sliders me-2"></i>通用设置</h6>
+                    <small>配置应用的基本参数</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/settings" id="formGeneral">
+                        <input type="hidden" name="category" value="general">
+
+                        <div class="row mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">应用名称</label>
+                                <input type="text" class="form-control" name="app_name"
+                                       value="{{if .general}}{{index .general "app_name"}}{{end}}"
+                                       placeholder="日报助手">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">时区</label>
+                                <select class="form-select" name="timezone">
+                                    {{$tz := ""}}
+                                    {{if .general}}{{$tz = index .general "timezone"}}{{end}}
+                                    <option value="Asia/Shanghai" {{if or (eq $tz "Asia/Shanghai") (eq $tz "")}}selected{{end}}>Asia/Shanghai (中国标准时间)</option>
+                                    <option value="Asia/Tokyo" {{if eq $tz "Asia/Tokyo"}}selected{{end}}>Asia/Tokyo (日本)</option>
+                                    <option value="Asia/Hong_Kong" {{if eq $tz "Asia/Hong_Kong"}}selected{{end}}>Asia/Hong_Kong (香港)</option>
+                                    <option value="Asia/Singapore" {{if eq $tz "Asia/Singapore"}}selected{{end}}>Asia/Singapore (新加坡)</option>
+                                    <option value="UTC" {{if eq $tz "UTC"}}selected{{end}}>UTC (协调世界时)</option>
+                                    <option value="America/New_York" {{if eq $tz "America/New_York"}}selected{{end}}>America/New_York (美东)</option>
+                                    <option value="Europe/London" {{if eq $tz "Europe/London"}}selected{{end}}>Europe/London (伦敦)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="setting-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-check-lg me-1"></i>保存通用设置
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{{template "footer" .}}
+{{template "scripts" .}}
+<script>
+(function() {
+    // ========== 标签页切换 ==========
+    var tabs = document.querySelectorAll('#settingsTabs .tab-link');
+    var sections = document.querySelectorAll('.settings-section');
+
+    function switchTab(tabName) {
+        tabs.forEach(function(t) {
+            t.classList.toggle('active', t.getAttribute('data-tab') === tabName);
+        });
+        sections.forEach(function(s) {
+            s.classList.toggle('active', s.id === 'section-' + tabName);
+        });
+        // 更新 URL hash
+        window.location.hash = tabName;
+    }
+
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            switchTab(this.getAttribute('data-tab'));
+        });
+    });
+
+    // 从 URL hash 恢复标签页
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById('section-' + hash)) {
+        switchTab(hash);
+    }
+
+    // ========== 密码显示/隐藏 ==========
+    window.togglePassword = function(inputId, btn) {
+        var input = document.getElementById(inputId);
+        var icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'bi bi-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'bi bi-eye';
+        }
+    };
+
+    // ========== 通用的状态提示 ==========
+    function showAlert(message, level) {
+        var container = document.getElementById('flashContainer');
+        if (!container) return;
+        var typeMap = { success: 'success', error: 'danger', warning: 'warning', info: 'info' };
+        var iconMap = { success: 'bi-check-circle-fill', error: 'bi-exclamation-triangle-fill', warning: 'bi-exclamation-circle-fill', info: 'bi-info-circle-fill' };
+        var bsLevel = typeMap[level] || 'info';
+        var icon = iconMap[level] || 'bi-info-circle-fill';
+        var alertEl = document.createElement('div');
+        alertEl.className = 'alert alert-' + bsLevel + ' alert-dismissible fade show d-flex align-items-center';
+        alertEl.setAttribute('role', 'alert');
+        alertEl.innerHTML = '<i class="bi ' + icon + ' me-2"></i><div>' + message + '</div>' +
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>';
+        container.appendChild(alertEl);
+        setTimeout(function() {
+            var bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
+            if (bsAlert) bsAlert.close();
+        }, 6000);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ========== 测试 SMTP 连接 ==========
+    window.testSmtp = function() {
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>测试中…';
+
+        var form = document.getElementById('formSmtp');
+        var fd = new FormData(form);
+        var data = {};
+        fd.forEach(function(v, k) { data[k] = v; });
+
+        fetch('/settings/test-smtp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                host: data.host || '',
+                port: data.port || '',
+                username: data.username || '',
+                password: data.password || '',
+                use_tls: data.use_tls || 'false'
+            })
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(result) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            if (result.code === 0) {
+                showAlert(result.message || 'SMTP 连接测试成功！', 'success');
+            } else {
+                showAlert(result.message || 'SMTP 连接测试失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            showAlert('请求失败: ' + err.message, 'error');
+        });
+    };
+
+    // ========== 测试邮件发送 ==========
+    window.testEmail = function() {
+        var to = prompt('请输入测试收件人邮箱地址：');
+        if (!to || !to.trim()) return;
+
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>发送中…';
+
+        fetch('/settings/test-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ to: to.trim() })
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(result) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            if (result.code === 0) {
+                showAlert(result.message || '测试邮件发送成功！', 'success');
+            } else {
+                showAlert(result.message || '测试邮件发送失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            showAlert('请求失败: ' + err.message, 'error');
+        });
+    };
+
+    // ========== 测试思源连接 ==========
+    window.testSiyuan = function() {
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>测试中…';
+
+        var form = document.getElementById('formSiyuan');
+        var fd = new FormData(form);
+        var data = {};
+        fd.forEach(function(v, k) { data[k] = v; });
+
+        fetch('/sync/test-siyuan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                base_url: data.base_url || '',
+                api_token: data.api_token || ''
+            })
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(result) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            if (result.code === 0) {
+                showAlert(result.message || '思源笔记连接成功！', 'success');
+            } else {
+                showAlert(result.message || '思源笔记连接失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            showAlert('请求失败: ' + err.message, 'error');
+        });
+    };
+
+    // ========== 从思源同步 ==========
+    window.syncFromSiyuan = function() {
+        if (!confirm('确认从思源笔记拉取同步日报数据？')) return;
+
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>同步中…';
+
+        fetch('/sync/from-siyuan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(result) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            if (result.code === 0) {
+                showAlert(result.message || '同步成功！', 'success');
+            } else {
+                showAlert(result.message || '同步失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            showAlert('请求失败: ' + err.message, 'error');
+        });
+    };
+})();
+</script>
+</body>
+</html>
+{{end}}

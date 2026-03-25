@@ -1,0 +1,114 @@
+{{define "404.html"}}
+<!doctype html>
+<html lang="zh-CN">
+    {{template "head" .}}
+    <body>
+        {{template "navbar" .}}
+
+        <style>
+            .error-wrapper {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 3rem 1rem;
+            }
+            .error-code {
+                font-size: 8rem;
+                font-weight: 800;
+                line-height: 1;
+                color: var(--color-primary);
+                letter-spacing: -0.04em;
+                margin-bottom: 0.5rem;
+            }
+            .error-title {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: var(--color-text);
+                margin-bottom: 0.5rem;
+            }
+            .error-desc {
+                font-size: 1rem;
+                color: var(--color-text-muted);
+                max-width: 420px;
+                margin: 0 auto 2rem auto;
+                line-height: 1.7;
+            }
+            .error-actions {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.75rem;
+                flex-wrap: wrap;
+            }
+            .error-decoration {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.5rem;
+                margin-bottom: 1.5rem;
+            }
+            .error-decoration .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .error-decoration .dot:nth-child(1) {
+                background-color: var(--color-primary);
+                opacity: 0.3;
+            }
+            .error-decoration .dot:nth-child(2) {
+                background-color: var(--color-primary);
+                opacity: 0.6;
+            }
+            .error-decoration .dot:nth-child(3) {
+                background-color: var(--color-primary);
+                opacity: 1;
+                width: 10px;
+                height: 10px;
+            }
+            .error-decoration .dot:nth-child(4) {
+                background-color: var(--color-primary);
+                opacity: 0.6;
+            }
+            .error-decoration .dot:nth-child(5) {
+                background-color: var(--color-primary);
+                opacity: 0.3;
+            }
+        </style>
+
+        <div class="error-wrapper">
+            <div class="text-center">
+                <div class="error-decoration">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </div>
+                <div class="error-code">404</div>
+                <h1 class="error-title">页面未找到</h1>
+                <p class="error-desc">
+                    {{if .message}} {{.message}} {{else}}
+                    抱歉，您访问的页面不存在或已被移除。请检查地址是否正确，或返回首页继续浏览。
+                    {{end}}
+                </p>
+                <div class="error-actions">
+                    <a href="/" class="btn btn-primary">
+                        <i class="bi bi-house-door me-1"></i>返回首页
+                    </a>
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        onclick="history.back()"
+                    >
+                        <i class="bi bi-arrow-left me-1"></i>返回上页
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {{template "footer" .}} {{template "scripts" .}}
+    </body>
+</html>
+{{end}}
