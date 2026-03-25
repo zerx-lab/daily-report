@@ -159,6 +159,15 @@ func (s *EmailService) GetRecipients() (to []string, cc []string, err error) {
 
 // RenderSubject 渲染邮件主题
 func (s *EmailService) RenderSubject(report *model.Report) (string, error) {
+	if report == nil {
+		return "", fmt.Errorf("日报记录不能为空")
+	}
+
+	return s.renderSubject(report.Date, report.Weekday)
+}
+
+// renderSubject 按日期渲染邮件主题
+func (s *EmailService) renderSubject(date, weekday string) (string, error) {
 	subjectTmpl := model.GetSettingValue(s.db, model.CategoryEmail, model.KeyEmailSubject, "{{.Date}} 工作日报")
 	appName := model.GetSettingValue(s.db, model.CategoryGeneral, model.KeyGeneralAppName, "日报助手")
 
@@ -168,8 +177,8 @@ func (s *EmailService) RenderSubject(report *model.Report) (string, error) {
 	}
 
 	data := EmailTemplateData{
-		Date:    report.Date,
-		Weekday: report.Weekday,
+		Date:    date,
+		Weekday: weekday,
 		AppName: appName,
 		Author:  appName,
 	}
@@ -180,6 +189,48 @@ func (s *EmailService) RenderSubject(report *model.Report) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// getReportWeekday 根据日期字符串推导星期几
+func getReportWeekday(date string) string {
+	t, err := time.Parse("2006-01-02", strings.TrimSpace(date))
+	if err != nil {
+		return ""
+	}
+
+	weekdays := []string{"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"}
+	return weekdays[int(t.Weekday())]
+}
+
+// getBatchReportDisplayDate 获取批量发送时展示用的日期
+func getBatchReportDisplayDate(reports []*model.Report) string {
+	var latest time.Time
+
+	for _, report := range reports {
+		if report == nil {
+			continue
+		}
+
+		date := strings.TrimSpace(report.Date)
+		if date == "" {
+			continue
+		}
+
+		t, err := time.Parse("2006-01-02", date)
+		if err != nil {
+			continue
+		}
+
+		if latest.IsZero() || t.After(latest) {
+			latest = t
+		}
+	}
+
+	if latest.IsZero() {
+		return time.Now().Format("2006-01-02")
+	}
+
+	return latest.Format("2006-01-02")
 }
 
 // RenderBody 渲染邮件正文 HTML
@@ -384,15 +435,9 @@ func (s *EmailService) GenerateBatchExcelReport(reports []*model.Report) ([]byte
 		return nil, "", fmt.Errorf("生成 Excel 字节流失败: %w", err)
 	}
 
-	// 文件名使用日期范围
-	firstDate := reports[0].Date
-	lastDate := reports[len(reports)-1].Date
-	var filename string
-	if firstDate == lastDate {
-		filename = fmt.Sprintf("%s-日报-%s.xlsx", author, firstDate)
-	} else {
-		filename = fmt.Sprintf("%s-日报-%s~%s.xlsx", author, firstDate, lastDate)
-	}
+	// 文件名仅使用展示日期，避免出现无效范围或时间串
+	displayDate := getBatchReportDisplayDate(reports)
+	filename := fmt.Sprintf("%s-日报-%s.xlsx", author, displayDate)
 
 	log.Printf("[邮件服务] 生成批量 Excel 附件: %s (%d 条日报, %d bytes)\n", filename, len(reports), buf.Len())
 	return buf.Bytes(), filename, nil
@@ -431,18 +476,11 @@ func (s *EmailService) SendBatchReports(reports []*model.Report, sendType int) (
 		return 0, fmt.Errorf("收件人配置错误: %w", err)
 	}
 
-	// 3. 渲染邮件主题（单条用原有模板，多条用日期范围）
-	firstDate := validReports[0].Date
-	lastDate := validReports[len(validReports)-1].Date
-	var subject string
-	if firstDate == lastDate {
-		subject, err = s.RenderSubject(validReports[0])
-		if err != nil {
-			return 0, fmt.Errorf("渲染邮件主题失败: %w", err)
-		}
-	} else {
-		appName := model.GetSettingValue(s.db, model.CategoryGeneral, model.KeyGeneralAppName, "日报助手")
-		subject = fmt.Sprintf("%s ~ %s %s工作日报", firstDate, lastDate, appName)
+	// 3. 渲染邮件主题（批量发送仅展示一个日期）
+	displayDate := getBatchReportDisplayDate(validReports)
+	subject, err := s.renderSubject(displayDate, getReportWeekday(displayDate))
+	if err != nil {
+		return 0, fmt.Errorf("渲染邮件主题失败: %w", err)
 	}
 
 	// 4. 生成批量 Excel 附件
