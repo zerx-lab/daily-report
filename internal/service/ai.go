@@ -28,6 +28,11 @@ type AIService struct {
 	siyuanSvc *SiyuanService
 }
 
+type actionIntent struct {
+	NeedToolCall bool
+	ActionName   string
+}
+
 // NewAIService 创建 AI 服务实例
 func NewAIService(db *gorm.DB, reportSvc *ReportService, outingSvc *OutingService, emailSvc *EmailService, siyuanSvc *SiyuanService) *AIService {
 	return &AIService{
@@ -258,6 +263,8 @@ func (s *AIService) Chat(ctx context.Context, userID string, userMessage string)
 		return "", err
 	}
 
+	intent := detectActionIntent(userMessage)
+
 	client := s.newClient(cfg)
 
 	// 构建系统提示词
@@ -325,6 +332,11 @@ func (s *AIService) Chat(ctx context.Context, userID string, userMessage string)
 			if content == "" {
 				content = "操作完成。"
 			}
+
+			if intent.NeedToolCall {
+				log.Printf("[AI] 检测到动作意图但未触发工具调用: action=%s, user=%s, message=%s\n", intent.ActionName, userID, userMessage)
+				content = s.buildNoToolCallNotice(intent, content)
+			}
 			// 保存对话记忆
 			if userID != "" {
 				_ = model.SaveChatMessage(s.db, userID, "user", userMessage)
@@ -358,6 +370,37 @@ func (s *AIService) Chat(ctx context.Context, userID string, userMessage string)
 		_ = model.SaveChatMessage(s.db, userID, "assistant", content)
 	}
 	return content, nil
+}
+
+func detectActionIntent(userMessage string) actionIntent {
+	msg := strings.TrimSpace(userMessage)
+	if msg == "" {
+		return actionIntent{}
+	}
+
+	compact := strings.NewReplacer(" ", "", "\n", "", "\t", "", "：", ":", "，", ",").Replace(msg)
+
+	switch {
+	case strings.Contains(compact, "发送日报"):
+		return actionIntent{NeedToolCall: true, ActionName: "发送日报"}
+	case strings.Contains(compact, "发送外出申请") || strings.Contains(compact, "发送外出"):
+		return actionIntent{NeedToolCall: true, ActionName: "发送外出申请"}
+	case strings.Contains(compact, "今天日报:") || strings.Contains(compact, "今日日报:") || strings.Contains(compact, "今天工作:") || strings.Contains(compact, "今日日报") && strings.Contains(compact, "只保留") || strings.Contains(compact, "日报") && strings.Contains(compact, "其他内容都不需要"):
+		return actionIntent{NeedToolCall: true, ActionName: "更新今日日报"}
+	case strings.Contains(compact, "创建外出申请"):
+		return actionIntent{NeedToolCall: true, ActionName: "创建外出申请"}
+	default:
+		return actionIntent{}
+	}
+}
+
+func (s *AIService) buildNoToolCallNotice(intent actionIntent, reply string) string {
+	reply = strings.TrimSpace(reply)
+	if reply == "" {
+		reply = "本次回复仅为文本说明。"
+	}
+
+	return fmt.Sprintf("检测到你是在要求我“%s”，但这次 AI 没有实际调用系统工具，所以操作并没有真正执行。\n\n请以我的执行结果为准：如果我没有明确返回“已更新/已发送/已创建”，就表示这次只是文字回复。\n\n本次仅生成了说明文字：\n%s", intent.ActionName, reply)
 }
 
 // getMemoryCount 获取 AI 记忆条数配置

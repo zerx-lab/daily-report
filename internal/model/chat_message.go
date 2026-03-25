@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -26,7 +27,42 @@ func SaveChatMessage(db *gorm.DB, userID, role, content string) error {
 		Role:    role,
 		Content: content,
 	}
-	return db.Create(msg).Error
+
+	if err := db.Create(msg).Error; err != nil {
+		return err
+	}
+
+	return TrimChatMessages(db, userID, 20)
+}
+
+// TrimChatMessages 将指定用户的对话记忆裁剪到最多 limit 条。
+func TrimChatMessages(db *gorm.DB, userID string, limit int) error {
+	if limit <= 0 {
+		if err := db.Unscoped().Where("user_id = ?", userID).Delete(&ChatMessage{}).Error; err != nil {
+			return fmt.Errorf("清理对话记忆失败(user=%s): %w", userID, err)
+		}
+		return nil
+	}
+
+	var ids []uint
+	if err := db.Model(&ChatMessage{}).
+		Where("user_id = ?", userID).
+		Order("created_at DESC, id DESC").
+		Offset(limit).
+		Pluck("id", &ids).Error; err != nil {
+		return fmt.Errorf("查询超限对话记忆失败(user=%s): %w", userID, err)
+	}
+
+	if len(ids) == 0 {
+		return nil
+	}
+
+	if err := db.Unscoped().Where("id IN ?", ids).Delete(&ChatMessage{}).Error; err != nil {
+		return fmt.Errorf("删除超限对话记忆失败(user=%s): %w", userID, err)
+	}
+
+	log.Printf("[对话记忆] 已裁剪用户 %s 的超限记忆 %d 条\n", userID, len(ids))
+	return nil
 }
 
 // GetRecentMessages 获取用户最近 N 条对话消息（按时间升序，用于构建上下文）
