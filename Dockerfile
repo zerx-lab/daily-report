@@ -47,7 +47,7 @@ RUN mkdir -p data
 # 数据持久化卷（Coolify 中配置 Volume 挂载到此路径）
 VOLUME ["/app/data", "/app/config"]
 
-EXPOSE 8080
+EXPOSE 8765
 
 ENTRYPOINT ["./daily-report"]
 CMD ["-config", "config/config.yaml"]
