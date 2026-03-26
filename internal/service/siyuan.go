@@ -275,6 +275,26 @@ func (s *SiyuanService) GetCurrentTime() (int64, error) {
 	return ts, nil
 }
 
+// PerformCloudSync 触发思源笔记云同步（需提前在思源笔记中配置好云存储）
+func (s *SiyuanService) PerformCloudSync() error {
+	_, err := s.doRequest("/api/sync/performSync", map[string]interface{}{})
+	if err != nil {
+		return fmt.Errorf("触发云同步失败: %w", err)
+	}
+	log.Println("[思源API] 云同步已触发")
+	return nil
+}
+
+// TriggerCloudSyncAsync 异步触发云同步，不阻塞当前操作，错误仅记录日志
+// 在每次向思源写入数据后调用，确保数据及时上传到云端
+func (s *SiyuanService) TriggerCloudSyncAsync() {
+	go func() {
+		if err := s.PerformCloudSync(); err != nil {
+			log.Printf("[思源API] 云同步触发失败(异步，可能未配置云同步服务): %v\n", err)
+		}
+	}()
+}
+
 // CreateReportEntry 在数据库顶部新建一行日报记录
 // content: 日报主键列的内容文本
 // 返回: 新创建行的 ID（由思源自动生成，需从后续渲染中获取）
@@ -582,6 +602,7 @@ func (s *SiyuanService) SyncLocalToSiyuan(reportID uint) error {
 				"synced_at": &now,
 			})
 		}
+		s.TriggerCloudSyncAsync()
 		return nil
 	}
 
@@ -592,6 +613,7 @@ func (s *SiyuanService) SyncLocalToSiyuan(reportID uint) error {
 
 	now := time.Now()
 	s.db.Model(&report).Update("synced_at", &now)
+	s.TriggerCloudSyncAsync()
 	return nil
 }
 
@@ -1084,6 +1106,7 @@ func (s *SiyuanService) SyncOutingToSiyuan(outingID uint) error {
 		if siyuanID != "" {
 			s.db.Model(&outing).Update("siyuan_id", siyuanID)
 		}
+		s.TriggerCloudSyncAsync()
 		return nil
 	}
 
@@ -1092,6 +1115,7 @@ func (s *SiyuanService) SyncOutingToSiyuan(outingID uint) error {
 		return fmt.Errorf("更新思源笔记外出申请失败: %w", err)
 	}
 
+	s.TriggerCloudSyncAsync()
 	return nil
 }
 

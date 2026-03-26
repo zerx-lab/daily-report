@@ -449,6 +449,8 @@ func (s *Scheduler) jobAutoCreateReport() {
 				log.Printf("[定时任务] 同步思源笔记失败（不影响本地记录）: %v\n", err)
 			} else {
 				log.Println("[定时任务] 同步思源笔记成功")
+				// 触发云同步，确保新建日报条目上传到云端
+				s.siyuanSvc.TriggerCloudSyncAsync()
 			}
 		}
 	}
