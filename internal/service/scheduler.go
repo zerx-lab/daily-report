@@ -449,6 +449,21 @@ func (s *Scheduler) jobAutoCreateReport() {
 				log.Printf("[定时任务] 同步思源笔记失败（不影响本地记录）: %v\n", err)
 			} else {
 				log.Println("[定时任务] 同步思源笔记成功")
+				// 回填 SiyuanID，防止后续 AI/MCP 同步时误判为不存在而重复插入
+				row, fetchErr := s.siyuanSvc.FetchReportByDate(dateStr)
+				if fetchErr == nil && row != nil {
+					now2 := time.Now()
+					if dbErr := s.db.Model(&report).Updates(map[string]interface{}{
+						"siyuan_id": row.RowID,
+						"synced_at": &now2,
+					}).Error; dbErr != nil {
+						log.Printf("[定时任务] 回填 SiyuanID 失败: %v\n", dbErr)
+					} else {
+						log.Printf("[定时任务] SiyuanID 回填成功: %s\n", row.RowID)
+					}
+				} else if fetchErr != nil {
+					log.Printf("[定时任务] 查询思源行 ID 失败，SiyuanID 未回填: %v\n", fetchErr)
+				}
 				// 触发云同步，确保新建日报条目上传到云端
 				s.siyuanSvc.TriggerCloudSyncAsync()
 			}

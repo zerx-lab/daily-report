@@ -589,11 +589,28 @@ func (s *SiyuanService) SyncLocalToSiyuan(reportID uint) error {
 	}
 
 	if report.SiyuanID == "" {
-		// 本地日报没有对应的思源记录，先创建
+		// SiyuanID 为空，先去思源查一下当天是否已经存在行（防止定时任务已创建但未回填 ID）
+		existingRow, fetchErr := s.FetchReportByDate(report.Date)
+		if fetchErr == nil && existingRow != nil {
+			// 思源里已有该日期的行，直接更新内容并回填 ID，不再重复创建
+			log.Printf("[思源同步] 检测到思源已存在 %s 的日报行，跳过创建，直接更新内容\n", report.Date)
+			if err := s.UpdateReportEntry(existingRow.RowID, report.Content); err != nil {
+				return fmt.Errorf("更新思源笔记条目失败: %w", err)
+			}
+			now := time.Now()
+			s.db.Model(&report).Updates(map[string]interface{}{
+				"siyuan_id": existingRow.RowID,
+				"synced_at": &now,
+			})
+			s.TriggerCloudSyncAsync()
+			return nil
+		}
+
+		// 思源里确实没有该日期的行，创建新行
 		if err := s.CreateReportEntry(report.Content); err != nil {
 			return fmt.Errorf("在思源笔记创建条目失败: %w", err)
 		}
-		// 创建后尝试获取对应行的 ID
+		// 创建后尝试获取对应行的 ID 并回填
 		row, err := s.FetchReportByDate(report.Date)
 		if err == nil && row != nil {
 			now := time.Now()
