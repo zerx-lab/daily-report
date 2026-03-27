@@ -442,9 +442,7 @@ func (s *Scheduler) jobAutoCreateReport() {
 
 		// 同步到思源笔记
 		if s.siyuanSvc != nil {
-			weekday := weekdayToChinese(now.Weekday())
-			content := fmt.Sprintf("%s %s 工作日报 - 待填写", dateStr, weekday)
-			err := s.siyuanSvc.CreateReportEntry(content)
+			err := s.siyuanSvc.CreateReportEntry("待填写")
 			if err != nil {
 				log.Printf("[定时任务] 同步思源笔记失败（不影响本地记录）: %v\n", err)
 			} else {
