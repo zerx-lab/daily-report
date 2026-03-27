@@ -167,17 +167,6 @@ func (s *Scheduler) loadAndRegisterJobs() error {
 		s.updateTaskRecord("auto_sync_siyuan", syncCron, false, nil)
 	}
 
-	// 注册每日清理对话记忆任务（每天凌晨 00:00 固定执行）
-	clearMemoryCron := "0 0 0 * * *"
-	if s.aiSvc != nil {
-		if err := s.registerJob("auto_clear_memory", clearMemoryCron, s.jobAutoClearMemory); err != nil {
-			log.Printf("[调度器] 注册清理对话记忆任务失败: %v\n", err)
-		}
-	} else {
-		log.Println("[调度器] AI 服务未初始化，跳过注册清理对话记忆任务")
-		s.updateTaskRecord("auto_clear_memory", clearMemoryCron, false, nil)
-	}
-
 	return nil
 }
 
@@ -562,38 +551,6 @@ func (s *Scheduler) jobAutoSendReport() {
 // ==================== 辅助方法 ====================
 
 // shouldSkipToday 判断今天是否需要跳过（非工作日或节假日）
-// jobAutoClearMemory 每日清理所有用户的对话记忆
-func (s *Scheduler) jobAutoClearMemory() {
-	log.Println("[定时任务] 开始执行每日清理对话记忆")
-
-	startTime := time.Now()
-	var taskErr error
-	defer func() {
-		errMsg := ""
-		if taskErr != nil {
-			errMsg = taskErr.Error()
-			log.Printf("[定时任务] 清理对话记忆失败: %v\n", taskErr)
-		} else {
-			duration := time.Since(startTime)
-			log.Printf("[定时任务] 清理对话记忆完成 (耗时 %v)\n", duration)
-		}
-		s.recordTaskRun("auto_clear_memory", errMsg)
-	}()
-
-	if s.aiSvc == nil {
-		taskErr = fmt.Errorf("AI 服务未初始化")
-		return
-	}
-
-	cleared, err := s.aiSvc.ClearAllMemory()
-	if err != nil {
-		taskErr = fmt.Errorf("清理对话记忆失败: %w", err)
-		return
-	}
-
-	log.Printf("[定时任务] 每日清理对话记忆成功，共清除 %d 条记录\n", cleared)
-}
-
 func (s *Scheduler) shouldSkipToday(now time.Time) bool {
 	// 检查是否启用了节假日跳过
 	skipHoliday := model.GetSettingValue(s.db, model.CategorySchedule, model.KeyScheduleSkipHoliday, "true")
@@ -689,8 +646,7 @@ func (s *Scheduler) taskDescriptionFromName(name string) string {
 		return "自动发送日报"
 	case "auto_sync_siyuan":
 		return "自动同步思源笔记到本地"
-	case "auto_clear_memory":
-		return "自动清理对话记忆"
+
 	default:
 		return "自动任务"
 	}
@@ -705,8 +661,7 @@ func (s *Scheduler) taskTypeFromName(name string) string {
 		return "send"
 	case "auto_sync_siyuan":
 		return "sync"
-	case "auto_clear_memory":
-		return "clear_memory"
+
 	default:
 		return "other"
 	}
