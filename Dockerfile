@@ -4,7 +4,7 @@
 # ============================================================
 
 # -------------------- 阶段 1: 编译 --------------------
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # CGO 必须启用（SQLite 依赖 mattn/go-sqlite3）
 ENV CGO_ENABLED=1
