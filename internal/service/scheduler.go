@@ -167,6 +167,9 @@ func (s *Scheduler) loadAndRegisterJobs() error {
 		s.updateTaskRecord("auto_sync_siyuan", syncCron, false, nil)
 	}
 
+	// 清理已废弃的任务记录（不再使用的任务从数据库中删除，避免 UI 残留显示）
+	s.db.Where("task_name = ?", "auto_clear_memory").Delete(&model.ScheduleTask{})
+
 	return nil
 }
 
